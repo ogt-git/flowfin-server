@@ -6,6 +6,7 @@ import com.project.flowfinserver.dto.LoginResponse;
 import com.project.flowfinserver.dto.SignupRequest;
 import com.project.flowfinserver.jwt.JwtUtil;
 import com.project.flowfinserver.repository.UserRepository;
+import com.project.flowfinserver.util.AesEncryptionUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,14 +18,17 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final AesEncryptionUtil encryptionUtil;
 
     public void signup(SignupRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String emailHash = encryptionUtil.hash(request.getEmail());
+        if (userRepository.existsByEmailHash(emailHash)) {
             throw new RuntimeException("이미 존재하는 이메일입니다.");
         }
 
         User user = User.builder()
                 .email(request.getEmail())
+                .emailHash(emailHash)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
                 .build();
@@ -33,7 +37,8 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        String emailHash = encryptionUtil.hash(request.getEmail());
+        User user = userRepository.findByEmailHash(emailHash)
                 .orElseThrow(() -> new RuntimeException("존재하지 않는 이메일입니다."));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {

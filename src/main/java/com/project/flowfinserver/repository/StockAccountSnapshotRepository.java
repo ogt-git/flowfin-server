@@ -6,9 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDate;
 import java.util.Optional;
 
-public interface
-
-StockAccountSnapshotRepository extends JpaRepository<StockAccountSnapshot, Long> {
+public interface StockAccountSnapshotRepository extends JpaRepository<StockAccountSnapshot, Long> {
 
     Optional<StockAccountSnapshot> findTopByUserIdOrderBySnapshotDateDesc(Long userId);
 

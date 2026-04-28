@@ -28,9 +28,11 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/codef/connect").permitAll() // 레거시 테스트 엔드포인트
-                        .anyRequest().authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/codef/connect").permitAll()
+                        // TODO: 회원/인증 모듈 통합 완료 후 .authenticated() 로 되돌릴 것 (JWT 인증 필터 활성화)
+                        .anyRequest().permitAll()
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);

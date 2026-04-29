@@ -3,7 +3,6 @@ package com.project.flowfinserver.domain;
 import com.project.flowfinserver.converter.AesEncryptConverter;
 import jakarta.persistence.*;
 import lombok.*;
-import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "users")
@@ -33,15 +32,6 @@ public class User {
     private String name;
   
     private String connectedId;  // CODEF Connected Account ID
-
-    @Builder
-    public User(String email, String password, String name, Provider provider, String connectedId) {
-        this.email = email;
-        this.password = password;
-        this.name = name;
-        this.provider = provider;
-        this.connectedId = connectedId;
-    }
 
     public void updateConnectedId(String connectedId) {
         this.connectedId = connectedId;

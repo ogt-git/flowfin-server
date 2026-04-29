@@ -82,7 +82,7 @@ class CodefSyncServiceTest {
         testAccount = CodefConnectedAccount.builder()
                 .userId(TEST_USER_ID)
                 .connectedId("test-connected-id-encrypted")
-                .organizationCode("0301")  // 신한카드
+                .organizationCode("0301")  // kb카드
                 .accountType(AccountType.CARD)
                 .build();
     }

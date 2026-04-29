@@ -2,6 +2,41 @@
   "permissions": {
     "allow": [
       "Bash(mysql *)"
+      "Bash(javap *)",
+      "Bash(./gradlew build *)",
+      "Bash(./gradlew bootRun --args='--spring.profiles.active=local')",
+      "Bash(docker exec flowfin-mysql *)",
+      "Bash(./gradlew bootRun --args='--spring.profiles.active=local' --info)",
+      "Bash(./gradlew clean *)",
+      "Bash(docker-compose down *)",
+      "Bash(docker-compose up *)",
+      "Bash(./gradlew bootRun --args='--spring.profiles.active=local --debug')",
+      "Bash(./gradlew bootRun --args='--spring.profiles.active=local' --stacktrace)",
+      "Bash(./gradlew bootRun)",
+      "Read(//c/Users/rudxo/.gradle/caches/**)",
+      "Read(//c/Users/rudxo/.gradle/caches/modules-2/files-2.1/com.mysql/**)",
+      "Bash(jar tf *)",
+      "Bash(./gradlew dependencies *)",
+      "Bash(python3 -c ' *)",
+      "Bash(netstat -ano)",
+      "Bash(powershell Get-Process -Id 30072, 5292 | Select-Object Id, ProcessName, MainWindowTitle *)",
+      "Bash(powershell *)",
+      "Bash(python *)",
+      "Bash(cmd /c \"sc query state= all\")",
+      "Bash(cmd /c \"sc query state= all 2>&1\")",
+      "Bash(cmd *)",
+      "Bash(wsl --list --running)",
+      "Bash(wsl -e bash -c \"ps aux | grep mysql\")",
+      "Bash(wsl *)",
+      "Bash(tasklist /FI \"PID eq 30940\")",
+      "Bash(taskkill *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(./gradlew test *)",
+      "Bash(./gradlew compileJava)",
+      "Bash(curl -s http://localhost:8080/swagger-ui/index.html)",
+      "Bash(curl -s http://localhost:8080/v3/api-docs)",
+      "Bash(echo \"PID: $!\" sleep 25 grep -E \"\\(Started|ERROR|Exception|swagger\\)\" /tmp/bootrun2.log)",
+      "PowerShell(Get-NetTCPConnection *)"
     ]
   }
 }

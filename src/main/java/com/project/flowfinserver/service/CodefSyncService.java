@@ -11,6 +11,7 @@ import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import com.project.flowfinserver.repository.ExpenseRepository;
 import com.project.flowfinserver.repository.StockAccountSnapshotRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -30,7 +32,8 @@ public class CodefSyncService {
     private static final String CARD_PRODUCT_URL = "/v1/kr/card/p/account/billing-list";
     private static final String STOCK_PRODUCT_URL = "/v1/kr/stock/a/account/financial-assets";
     private static final String CODEF_SUCCESS = "CF-00000";
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final DateTimeFormatter PARSE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
@@ -52,7 +55,7 @@ public class CodefSyncService {
         List<String> failedAccounts = new ArrayList<>();
 
         String endDate = LocalDate.now().format(DATE_FMT);
-        String startDate = LocalDate.now().minusDays(30).format(DATE_FMT);
+        String startDate = LocalDate.now().minusMonths(3).format(DATE_FMT);
 
         for (CodefConnectedAccount account : accounts) {
             try {
@@ -72,9 +75,16 @@ public class CodefSyncService {
                     continue;
                 }
 
+                JsonNode data = root.path("data");
+                // data:[] = 해당 기간 청구 내역 없음 (오류 아님)
+                if (data.isArray()) {
+                    log.info("[CODEF Sync] data=[] — no billing records for org={} period={}/{}", account.getOrganizationCode(), startDate, endDate);
+                    continue;
+                }
                 // resChargeHistoryList — 카드 청구내역 API 출력부 기준
-                JsonNode txArray = root.path("data").path("resChargeHistoryList");
+                JsonNode txArray = data.path("resChargeHistoryList");
                 if (!txArray.isArray()) {
+                    log.warn("[CODEF Sync] unexpected data format for org={}: data={}", account.getOrganizationCode(), data);
                     failedAccounts.add(account.getOrganizationCode() + "(응답 형식 불일치)");
                     continue;
                 }
@@ -90,7 +100,7 @@ public class CodefSyncService {
 
                     if (dateStr.isEmpty() || merchant.isEmpty() || amountStr.isEmpty()) continue;
 
-                    LocalDate transactedAt = LocalDate.parse(dateStr, DATE_FMT);
+                    LocalDate transactedAt = LocalDate.parse(dateStr, PARSE_FMT);
                     long amount = Long.parseLong(amountStr);
 
                     if (expenseRepository.existsByUserIdAndTransactedAtAndMerchantNameAndAmount(
@@ -148,9 +158,16 @@ public class CodefSyncService {
 
         for (CodefConnectedAccount account : accounts) {
             try {
+                if (account.getAccountNumber() == null || account.getAccountNumber().isBlank()) {
+                    log.warn("[CODEF Sync] accountNumber 없음 — org={} 건너뜀", account.getOrganizationCode());
+                    failedAccounts.add(account.getOrganizationCode() + "(계좌번호 미등록)");
+                    continue;
+                }
+
                 HashMap<String, Object> params = new HashMap<>();
                 params.put("connectedId", account.getConnectedId());
                 params.put("organization", account.getOrganizationCode());
+                params.put("account", account.getAccountNumber());
 
                 String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
                 JsonNode root = objectMapper.readTree(response);

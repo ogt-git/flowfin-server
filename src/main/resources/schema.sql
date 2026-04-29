@@ -1,4 +1,4 @@
--- ============================================================
+/*-- ============================================================
 -- 참조용 문서 — Spring Boot 자동 실행 안 됨
 -- 실제 DDL 및 시드 데이터는 docker/init.sql 에서 관리
 -- ============================================================
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS category (
     color                VARCHAR(20),
     parent_id            BIGINT,
     is_fixed             BOOLEAN      DEFAULT FALSE,
-    default_expense_type ENUM('FIXED','VARIABLE','IRREGULAR') DEFAULT 'VARIABLE',
+    default_expen.sqse_type ENUM('FIXED','VARIABLE','IRREGULAR') DEFAULT 'VARIABLE',
     sort_order           INT          DEFAULT 0,
     FOREIGN KEY (parent_id) REFERENCES category(id)
 );
@@ -169,3 +169,4 @@ CREATE TABLE IF NOT EXISTS stock_account_snapshot (
     UNIQUE KEY uq_snapshot (user_id, snapshot_date, broker_name),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+*/

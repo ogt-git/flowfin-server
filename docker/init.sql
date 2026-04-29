@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS codef_connected_account (
     connected_id      VARCHAR(255) NOT NULL,
     organization_code VARCHAR(20)  NOT NULL,
     account_type      ENUM('CARD','STOCK') NOT NULL,
+    account_number    VARCHAR(50),
     is_active         BOOLEAN      DEFAULT TRUE,
     created_at        DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -90,6 +91,9 @@ CREATE TABLE IF NOT EXISTS stock_account_snapshot (
 -- ============================================================
 -- 시드 데이터
 -- ============================================================
+
+INSERT IGNORE INTO users (id, email, name, provider) VALUES
+(1, 'test@flowfin.com', '테스트유저', 'LOCAL');
 
 INSERT IGNORE INTO category (id, name, icon, color, parent_id, is_fixed, default_expense_type, sort_order) VALUES
 (1,  '주거비',      '🏠', '#FF8C94', NULL, TRUE,  'FIXED',    1),

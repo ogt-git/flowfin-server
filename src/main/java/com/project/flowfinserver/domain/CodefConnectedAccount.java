@@ -34,6 +34,10 @@ public class CodefConnectedAccount {
     @Column(name = "account_type", nullable = false)
     private AccountType accountType;
 
+    // 증권 계좌번호 (카드는 null)
+    @Column(name = "account_number", length = 50)
+    private String accountNumber;
+
     @Column(name = "is_active")
     private boolean isActive = true;
 
@@ -43,12 +47,18 @@ public class CodefConnectedAccount {
 
     @Builder
     public CodefConnectedAccount(Long userId, String connectedId,
-                                  String organizationCode, AccountType accountType) {
+                                  String organizationCode, AccountType accountType,
+                                  String accountNumber) {
         this.userId = userId;
         this.connectedId = connectedId;
         this.organizationCode = organizationCode;
         this.accountType = accountType;
+        this.accountNumber = accountNumber;
         this.isActive = true;
+    }
+
+    public void updateAccountNumber(String accountNumber) {
+        this.accountNumber = accountNumber;
     }
 
     public void deactivate() {

@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(mysql *)"
       "Bash(javap *)",
       "Bash(./gradlew build *)",
       "Bash(./gradlew bootRun --args='--spring.profiles.active=local')",

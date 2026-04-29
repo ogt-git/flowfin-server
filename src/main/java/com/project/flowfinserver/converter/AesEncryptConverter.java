@@ -1,5 +1,10 @@
 package com.project.flowfinserver.converter;
 
+import com.project.flowfinserver.util.AesEncryptionUtil;
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,8 +20,10 @@ import java.util.Base64;
 
 @Component
 @Converter
+@RequiredArgsConstructor
 public class AesEncryptConverter implements AttributeConverter<String, String> {
 
+    private final AesEncryptionUtil encryptionUtil;
     private final byte[] keyBytes;
 
     public AesEncryptConverter(@Value("${codef.aes.secret-key}") String secretKey) {
@@ -27,6 +34,7 @@ public class AesEncryptConverter implements AttributeConverter<String, String> {
     @Override
     public String convertToDatabaseColumn(String attribute) {
         if (attribute == null) return null;
+        return encryptionUtil.encrypt(attribute);
         try {
             byte[] iv = new byte[16];
             new SecureRandom().nextBytes(iv);
@@ -45,6 +53,7 @@ public class AesEncryptConverter implements AttributeConverter<String, String> {
     @Override
     public String convertToEntityAttribute(String dbData) {
         if (dbData == null) return null;
+        return encryptionUtil.decrypt(dbData);
         try {
             byte[] combined = Base64.getDecoder().decode(dbData);
             byte[] iv = Arrays.copyOfRange(combined, 0, 16);

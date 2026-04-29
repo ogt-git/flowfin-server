@@ -81,7 +81,6 @@ class CodefSyncIntegrationTest {
         User testUser = userRepository.save(User.builder()
                 .email("integration-test@flowfin.test")
                 .name("테스트유저")
-                .provider(Provider.LOCAL)
                 .build());
         testUserId = testUser.getId();
 

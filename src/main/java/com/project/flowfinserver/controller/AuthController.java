@@ -1,11 +1,10 @@
 package com.project.flowfinserver.controller;
 
-import com.project.flowfinserver.dto.LoginRequest;
-import com.project.flowfinserver.dto.LoginResponse;
-import com.project.flowfinserver.dto.SignupRequest;
+import com.project.flowfinserver.dto.*;
 import com.project.flowfinserver.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,7 +22,17 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        LoginResponse response = authService.login(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refresh(@RequestBody TokenRefreshRequest request) {
+        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(Authentication authentication) {
+        authService.logout((Long) authentication.getPrincipal());
+        return ResponseEntity.ok().build();
     }
 }

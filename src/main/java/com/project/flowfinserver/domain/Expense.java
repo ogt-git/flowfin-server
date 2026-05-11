@@ -13,12 +13,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
-
 @Entity
 @Table(name = "expense",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_expense",
-                columnNames = {"user_id", "transacted_at", "merchant_name", "amount"}
+                columnNames = {"user_id", "expense_date", "merchant_name", "amount"}
         ))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -31,10 +30,10 @@ public class Expense {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "transacted_at", nullable = false)
-    private LocalDate transactedAt;
+    @Column(name = "expense_date", nullable = false)
+    private LocalDate expenseDate;
 
-    @Column(name = "merchant_name", nullable = false, length = 200)
+    @Column(name = "merchant_name", nullable = false, length = 255)
     private String merchantName;
 
     @Column(nullable = false)
@@ -44,11 +43,20 @@ public class Expense {
     private String cardCompany;
 
     @Column(name = "category_id")
-    private Long categoryId; // FK to category.id — null이면 미분류
+    private Long categoryId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "classified_by", length = 10)
-    private ClassifiedBy classifiedBy; // 분류 주체 (RULE/AI/USER)
+    private ClassifiedBy classifiedBy;
+
+    @Column(name = "category_confidence")
+    private Integer categoryConfidence;
+
+    @Column(name = "is_user_modified", nullable = false)
+    private boolean isUserModified = false;
+
+    @Column(name = "is_excluded", nullable = false)
+    private boolean isExcluded = false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "expense_type", length = 10)
@@ -63,22 +71,34 @@ public class Expense {
     private LocalDateTime createdAt;
 
     @Builder
-    public Expense(Long userId, LocalDate transactedAt, String merchantName,
+    public Expense(Long userId, LocalDate expenseDate, String merchantName,
                    Long amount, String cardCompany, Long categoryId,
-                   ClassifiedBy classifiedBy, ExpenseType expenseType, Map<String, Object> rawData) {
+                   ClassifiedBy classifiedBy, Integer categoryConfidence,
+                   ExpenseType expenseType, Map<String, Object> rawData) {
         this.userId = userId;
-        this.transactedAt = transactedAt;
+        this.expenseDate = expenseDate;
         this.merchantName = merchantName;
         this.amount = amount;
         this.cardCompany = cardCompany;
         this.categoryId = categoryId;
         this.classifiedBy = classifiedBy;
+        this.categoryConfidence = categoryConfidence;
+        this.isUserModified = false;
+        this.isExcluded = false;
         this.expenseType = expenseType != null ? expenseType : ExpenseType.VARIABLE;
         this.rawData = rawData;
     }
 
-    public void updateCategory(Long categoryId, ClassifiedBy classifiedBy) {
+    public void updateCategory(Long categoryId, ClassifiedBy classifiedBy, Integer confidence) {
         this.categoryId = categoryId;
         this.classifiedBy = classifiedBy;
+        this.categoryConfidence = confidence;
+        if (classifiedBy == ClassifiedBy.USER) {
+            this.isUserModified = true;
+        }
+    }
+
+    public void exclude() {
+        this.isExcluded = true;
     }
 }

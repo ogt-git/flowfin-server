@@ -3,6 +3,9 @@ package com.project.flowfinserver.domain;
 import com.project.flowfinserver.converter.AesEncryptConverter;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
@@ -20,7 +23,6 @@ public class User {
     @Convert(converter = AesEncryptConverter.class)
     private String email;
 
-    // 이메일 조회용 SHA-256 해시 (AES는 매번 다른 암호문 생성 → WHERE 절 불가)
     @Column(name = "email_hash", nullable = false, unique = true, length = 64)
     private String emailHash;
 
@@ -30,8 +32,12 @@ public class User {
     @Column(nullable = false, length = 512)
     @Convert(converter = AesEncryptConverter.class)
     private String name;
-  
-    private String connectedId;  // CODEF Connected Account ID
+
+    private String connectedId;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
     public void updateConnectedId(String connectedId) {
         this.connectedId = connectedId;

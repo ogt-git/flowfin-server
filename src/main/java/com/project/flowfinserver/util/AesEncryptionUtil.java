@@ -17,7 +17,7 @@ public class AesEncryptionUtil {
 
     private final byte[] key;
 
-    public AesEncryptionUtil(@Value("${aes.secret.key}") String secretKey) {
+    public AesEncryptionUtil(@Value("${encrypt.aes.secret-key}") String secretKey) {
         byte[] rawKey = secretKey.getBytes(StandardCharsets.UTF_8);
         this.key = Arrays.copyOf(rawKey, 32); // AES-256 = 32 bytes
     }

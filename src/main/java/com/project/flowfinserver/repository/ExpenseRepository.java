@@ -18,4 +18,7 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     Page<Expense> findAllByUserIdAndIsExcludedFalse(Long userId, Pageable pageable);
 
     List<Expense> findByUserIdAndCategoryIdIsNullOrderByExpenseDateDesc(Long userId);
+
+    List<Expense> findByUserIdAndCategoryIdInAndExpenseDateAfter(
+            Long userId, List<Long> categoryIds, LocalDateTime after);
 }

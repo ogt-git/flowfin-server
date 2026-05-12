@@ -20,6 +20,7 @@ public enum ErrorCode {
     // 리소스
     CONNECTION_NOT_FOUND(404, "연동 정보를 찾을 수 없습니다"),
     RESOURCE_NOT_FOUND(404, "요청한 리소스를 찾을 수 없습니다"),
+    MANUAL_ASSET_NOT_FOUND(404, "수동 자산 정보를 찾을 수 없습니다"),
 
     // 권한
     ACCESS_DENIED(403, "접근 권한이 없습니다"),

@@ -13,11 +13,13 @@ import com.project.flowfinserver.exception.CodefApiException;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -30,26 +32,53 @@ public class CodefService {
 
     // 카드/증권 계정 연결 (connectedId 발급)
     public String connectAccount(Long userId, CodefConnectRequest request) throws Exception {
-        log.info("[Connect] userId={} organization={} businessType={} loginType={} id={}",
-                userId, request.getOrganization(), request.getBusinessType(),
-                request.getLoginType(), request.getId());
+        String businessType = request.getBusinessType().toUpperCase();
+        String loginType    = request.getLoginType();
 
+        if (!"CD".equals(businessType) && !"ST".equals(businessType)) {
+            throw new IllegalArgumentException("businessType은 CD(카드) 또는 ST(증권)만 허용됩니다.");
+        }
+        if (!"0".equals(loginType) && !"1".equals(loginType)) {
+            throw new IllegalArgumentException("loginType은 '0'(인증서) 또는 '1'(아이디/패스워드)만 허용됩니다.");
+        }
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             throw new IllegalArgumentException("password는 필수입니다.");
         }
+
+        log.info("[Connect] userId={} organization={} businessType={} loginType={}",
+                userId, request.getOrganization(), businessType, loginType);
 
         String encryptedPw = codefApiClient.encryptRSA(request.getPassword());
 
         HashMap<String, Object> accountMap = new HashMap<>();
         accountMap.put("countryCode", "KR");
-        accountMap.put("businessType", request.getBusinessType().toUpperCase());
-        accountMap.put("clientType", "P");
+        accountMap.put("businessType", businessType);
+        accountMap.put("clientType", resolveClientType(businessType));
         accountMap.put("organization", request.getOrganization());
-        accountMap.put("loginType", request.getLoginType());
-        accountMap.put("id", request.getId());
+        accountMap.put("loginType", loginType);
         accountMap.put("password", encryptedPw);
 
-        ArrayList<HashMap<String, Object>> accountList = new ArrayList<>();
+        if ("0".equals(loginType)) {
+            // 인증서 방식 — derFile, keyFile 필수 / certType 하드코딩
+            if (!hasValue(request.getDerFile()) || !hasValue(request.getKeyFile())) {
+                throw new IllegalArgumentException("인증서 방식(loginType=0)은 derFile과 keyFile이 필수입니다.");
+            }
+            accountMap.put("certType", "1");
+            accountMap.put("derFile", request.getDerFile());
+            accountMap.put("keyFile", request.getKeyFile());
+        } else {
+            // 아이디/패스워드 방식 — id 필수
+            if (!hasValue(request.getId())) {
+                throw new IllegalArgumentException("아이디/패스워드 방식(loginType=1)은 id가 필수입니다.");
+            }
+            accountMap.put("id", request.getId());
+        }
+
+        if (hasValue(request.getBirthDate())) {
+            accountMap.put("birthDate", request.getBirthDate());
+        }
+
+        List<HashMap<String, Object>> accountList = new ArrayList<>();
         accountList.add(accountMap);
 
         HashMap<String, Object> parameterMap = new HashMap<>();
@@ -58,7 +87,7 @@ public class CodefService {
         String response = codefApiClient.createAccount(parameterMap);
 
         JsonNode root = objectMapper.readTree(response);
-        String resultCode = root.path("result").path("code").asText();
+        String resultCode    = root.path("result").path("code").asText();
         String resultMessage = root.path("result").path("message").asText();
 
         log.info("[Connect] CODEF result code={} message={}", resultCode, resultMessage);
@@ -69,20 +98,15 @@ public class CodefService {
 
         JsonNode successList = root.path("data").path("successList");
         if (successList.isArray()) {
-            for (JsonNode account : successList) {
-                String connectedId = root.path("data").path("connectedId").asText();
-                String organization = account.path("organization").asText();
-                String businessType = account.path("businessType").asText();
-                AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
+            String connectedId = root.path("data").path("connectedId").asText();
+            AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
 
+            for (JsonNode account : successList) {
+                String organization = account.path("organization").asText();
                 if (!connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountType(
                         userId, organization, accountType)) {
-                    connectedAccountRepository.save(CodefConnectedAccount.builder()
-                            .userId(userId)
-                            .connectedId(connectedId)
-                            .organizationCode(organization)
-                            .accountType(accountType)
-                            .build());
+                    connectedAccountRepository.save(
+                            CodefConnectedAccount.create(userId, connectedId, organization, accountType));
                     log.info("[Connect] saved connectedId for org={} type={}", organization, accountType);
                 } else {
                     log.info("[Connect] already exists for org={} type={}", organization, accountType);
@@ -91,6 +115,43 @@ public class CodefService {
         }
 
         return response;
+    }
+
+    // 연동 해지 — CODEF deleteAccount 호출 후 is_active=false
+    @Transactional
+    public void disconnect(Long userId, Long connectionId) throws Exception {
+        CodefConnectedAccount connection = connectedAccountRepository
+                .findByIdAndUserId(connectionId, userId)
+                .orElseThrow(() -> new AccessDeniedException("해당 연동 정보에 접근할 수 없습니다."));
+
+        String businessType = connection.getAccountType() == AccountType.CARD ? "CD" : "ST";
+
+        HashMap<String, Object> accountMap = new HashMap<>();
+        accountMap.put("connectedId", connection.getConnectedId());
+        accountMap.put("countryCode", "KR");
+        accountMap.put("businessType", businessType);
+        accountMap.put("clientType", resolveClientType(businessType));
+        accountMap.put("organization", connection.getOrganizationCode());
+
+        ArrayList<HashMap<String, Object>> accountList = new ArrayList<>();
+        accountList.add(accountMap);
+
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("accountList", accountList);
+
+        try {
+            String response = codefApiClient.deleteAccount(params);
+            JsonNode root = objectMapper.readTree(response);
+            String resultCode = root.path("result").path("code").asText();
+            if (!"CF-00000".equals(resultCode)) {
+                log.warn("[Disconnect] CODEF 해지 응답 비정상 code={} connectionId={}", resultCode, connectionId);
+            }
+        } catch (Exception e) {
+            log.warn("[Disconnect] CODEF deleteAccount 실패 connectionId={}", connectionId, e);
+        }
+
+        connection.deactivate();
+        log.info("[Disconnect] connectionId={} userId={} deactivated", connectionId, userId);
     }
 
     // 증권 계좌번호 등록 (연결 후 별도 등록)
@@ -110,13 +171,13 @@ public class CodefService {
         params.put("connectedId", request.getConnectedId());
         params.put("organization", request.getOrganization());
 
-        if (hasValue(request.getStartDate()))         params.put("startDate", request.getStartDate());
-        if (hasValue(request.getEndDate()))           params.put("endDate", request.getEndDate());
-        if (hasValue(request.getBirthDate()))         params.put("birthDate", request.getBirthDate());
-        if (hasValue(request.getMemberStoreInfoYN())) params.put("memberStoreInfoYN", request.getMemberStoreInfoYN());
-
-        if (hasValue(request.getCardNo()))       params.put("cardNo", request.getCardNo());
-        if (hasValue(request.getCardPassword())) params.put("cardPassword", codefApiClient.encryptRSA(request.getCardPassword()));
+        if (hasValue(request.getStartDate()))           params.put("startDate", request.getStartDate());
+        if (hasValue(request.getEndDate()))             params.put("endDate", request.getEndDate());
+        if (hasValue(request.getBirthDate()))           params.put("birthDate", request.getBirthDate());
+        if (hasValue(request.getInquiryType()))         params.put("inquiryType", request.getInquiryType());
+        if (hasValue(request.getMemberStoreInfoType())) params.put("memberStoreInfoType", request.getMemberStoreInfoType());
+        if (hasValue(request.getCardNo()))              params.put("cardNo", request.getCardNo());
+        if (hasValue(request.getCardPassword()))        params.put("cardPassword", codefApiClient.encryptRSA(request.getCardPassword()));
 
         return codefApiClient.requestProduct("/v1/kr/card/p/account/billing-list", params);
     }
@@ -134,6 +195,11 @@ public class CodefService {
         if (hasValue(request.getAddPassword()))     params.put("add_password", codefApiClient.encryptRSA(request.getAddPassword()));
 
         return codefApiClient.requestProduct("/v1/kr/stock/a/account/financial-assets", params);
+    }
+
+    // CD=카드 → "P"(개인), ST=증권 → "A"(통합)
+    private String resolveClientType(String businessType) {
+        return "ST".equals(businessType) ? "A" : "P";
     }
 
     private boolean hasValue(String s) {

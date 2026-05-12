@@ -21,7 +21,8 @@ public class CodefConfig {
     @Bean
     public EasyCodef easyCodef() {
         EasyCodef codef = new EasyCodef();
-        codef.setClientInfoForDemo(clientId, clientSecret);  // 데모버전
+        codef.setClientInfoForDemo(clientId, clientSecret);
+        codef.setClientInfo(clientId, clientSecret);
         codef.setPublicKey(publicKey);
         return codef;
     }

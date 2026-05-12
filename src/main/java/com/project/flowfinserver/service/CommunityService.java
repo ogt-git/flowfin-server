@@ -50,12 +50,8 @@ public class CommunityService {
     @Transactional
     public CommunityResponse createPost(CommunityRequest request, String token) {
         User user = getUserFromToken(token);
-        Community community = Community.builder()
-                .author(user)
-                .title(request.getTitle())
-                .content(request.getContent())
-                .category(request.getCategory())
-                .build();
+        Community community = Community.create(
+                user.getId(), request.getTitle(), request.getContent(), request.getCategory());
         return new CommunityResponse(communityRepository.save(community));
     }
 
@@ -65,11 +61,11 @@ public class CommunityService {
         Community community = communityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
 
-        if (!community.getAuthor().getId().equals(user.getId())) {
+        if (!community.getUserId().equals(user.getId())) {
             throw new RuntimeException("수정 권한이 없습니다.");
         }
 
-        community.update(request.getTitle(), request.getContent(), request.getCategory());
+        community.update(request.getTitle(), request.getContent());
         return new CommunityResponse(community);
     }
 
@@ -79,7 +75,7 @@ public class CommunityService {
         Community community = communityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
 
-        if (!community.getAuthor().getId().equals(user.getId())) {
+        if (!community.getUserId().equals(user.getId())) {
             throw new RuntimeException("삭제 권한이 없습니다.");
         }
 

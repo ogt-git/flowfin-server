@@ -9,15 +9,15 @@ import java.time.format.DateTimeFormatter;
 public class CommentResponse {
 
     private final Long id;
-    private final String author;
+    private final Long userId;
     private final String content;
     private final boolean isAnonymous;
     private final String createdAt;
 
     public CommentResponse(Comment comment) {
         this.id = comment.getId();
-        this.author = comment.isAnonymous() ? "익명" : comment.getAuthor().getName();
-        this.content = comment.getContent();
+        this.userId = comment.isAnonymous() ? null : comment.getUserId();
+        this.content = comment.isDeleted() ? "삭제된 댓글입니다." : comment.getContent();
         this.isAnonymous = comment.isAnonymous();
         this.createdAt = comment.getCreatedAt()
                 .format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));

@@ -2,12 +2,20 @@ package com.project.flowfinserver.service;
 
 import com.project.flowfinserver.domain.AssetAccount;
 import com.project.flowfinserver.domain.AssetItem;
+import com.project.flowfinserver.domain.CategoryType;
+import com.project.flowfinserver.domain.ManualAsset;
+import com.project.flowfinserver.domain.ManualAssetType;
+import com.project.flowfinserver.dto.asset.AssetSummaryResponse;
 import com.project.flowfinserver.dto.asset.StockAccountResponse;
 import com.project.flowfinserver.dto.asset.StockItemResponse;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.repository.AssetAccountRepository;
 import com.project.flowfinserver.repository.AssetItemRepository;
+import com.project.flowfinserver.repository.CategoryRepository;
+import com.project.flowfinserver.repository.ExpenseRepository;
+import com.project.flowfinserver.repository.ManualAssetRepository;
+import com.project.flowfinserver.repository.PortfolioRepository;
 import com.project.flowfinserver.util.MaskingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +23,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
@@ -24,6 +35,13 @@ public class AssetService {
 
     private final AssetAccountRepository assetAccountRepository;
     private final AssetItemRepository assetItemRepository;
+    private final ManualAssetRepository manualAssetRepository;
+    private final CategoryRepository categoryRepository;
+    private final ExpenseRepository expenseRepository;
+    private final PortfolioRepository portfolioRepository;
+
+    private static final List<ManualAssetType> LIQUID_ASSET_TYPES =
+            List.of(ManualAssetType.DEPOSIT, ManualAssetType.SAVINGS, ManualAssetType.CASH);
 
     /**
      * 계좌가 있으면 totalAsset·depositReceived 업데이트, 없으면 신규 저장.
@@ -114,8 +132,78 @@ public class AssetService {
         updateInvestableAmount(userId);
     }
 
-    // TODO: Sprint 2② — investable_amount 산출 로직 연결
-    private void updateInvestableAmount(Long userId) {
+    /**
+     * 투자 가능 금액을 산출하여 Portfolio 테이블을 동기화한다.
+     * 공식: max(0, 예수금합 + 유동수동자산합 - 고정비월평균 - 비상금(고정비1개월))
+     * 포트폴리오가 없는 경우 계산만 수행하고 업데이트는 건너뜀.
+     */
+    @Transactional
+    public long updateInvestableAmount(Long userId) {
+        long depositSum = assetAccountRepository.findAllByUserId(userId)
+                .stream().mapToLong(AssetAccount::getDepositReceived).sum();
+
+        long liquidManualSum = manualAssetRepository
+                .findByUserIdAndAssetTypeIn(userId, LIQUID_ASSET_TYPES)
+                .stream().mapToLong(ManualAsset::getAmount).sum();
+
+        long fixedMonthlyAvg = computeFixedMonthlyAvg(userId);
+        long emergencyFund = fixedMonthlyAvg;
+        long investable = Math.max(0L, depositSum + liquidManualSum - fixedMonthlyAvg - emergencyFund);
+
+        portfolioRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
+                .ifPresent(p -> p.updateInvestableAmount(investable));
+
+        log.debug("[Asset] investable_amount 갱신 userId={} deposit={} liquidManual={} fixedAvg={} result={}",
+                userId, depositSum, liquidManualSum, fixedMonthlyAvg, investable);
+        return investable;
+    }
+
+    /**
+     * 총 자산 요약을 반환한다. (읽기 전용, Portfolio 업데이트 없음)
+     */
+    @Transactional(readOnly = true)
+    public AssetSummaryResponse getAssetSummary(Long userId) {
+        List<AssetAccount> accounts = assetAccountRepository.findAllByUserId(userId);
+        long totalStockAsset = accounts.stream().mapToLong(AssetAccount::getTotalAsset).sum();
+        long depositSum = accounts.stream().mapToLong(AssetAccount::getDepositReceived).sum();
+
+        long liquidManualSum = manualAssetRepository
+                .findByUserIdAndAssetTypeIn(userId, LIQUID_ASSET_TYPES)
+                .stream().mapToLong(ManualAsset::getAmount).sum();
+
+        long totalManualSum = manualAssetRepository.findAllByUserId(userId)
+                .stream().mapToLong(ManualAsset::getAmount).sum();
+
+        long fixedMonthlyAvg = computeFixedMonthlyAvg(userId);
+        long emergencyFund = fixedMonthlyAvg;
+        long investable = Math.max(0L, depositSum + liquidManualSum - fixedMonthlyAvg - emergencyFund);
+
+        return new AssetSummaryResponse(
+                totalStockAsset, depositSum, liquidManualSum,
+                totalManualSum, investable, fixedMonthlyAvg, emergencyFund);
+    }
+
+    private long computeFixedMonthlyAvg(Long userId) {
+        LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
+
+        List<Long> fixedCategoryIds = categoryRepository.findByType(CategoryType.FIXED)
+                .stream().map(c -> c.getId()).toList();
+        if (fixedCategoryIds.isEmpty()) return 0L;
+
+        var fixedExpenses = expenseRepository
+                .findByUserIdAndCategoryIdInAndExpenseDateAfter(userId, fixedCategoryIds, threeMonthsAgo);
+        if (fixedExpenses.isEmpty()) return 0L;
+
+        long fixedTotal = fixedExpenses.stream().mapToLong(e -> e.getAmount()).sum();
+
+        // 실제 데이터 기간(최소 1개월)으로 나눠 월 평균 산출
+        LocalDateTime earliest = fixedExpenses.stream()
+                .map(e -> e.getExpenseDate())
+                .min(Comparator.naturalOrder())
+                .orElse(threeMonthsAgo);
+        long months = Math.max(1, ChronoUnit.MONTHS.between(earliest.toLocalDate(), LocalDateTime.now().toLocalDate()));
+
+        return fixedTotal / months;
     }
 
     @Transactional(readOnly = true)

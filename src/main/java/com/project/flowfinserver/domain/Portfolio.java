@@ -43,4 +43,8 @@ public class Portfolio {
         portfolio.investableAmount = Math.max(0L, investableAmount);
         return portfolio;
     }
+
+    public void updateInvestableAmount(Long amount) {
+        this.investableAmount = Math.max(0L, amount);
+    }
 }

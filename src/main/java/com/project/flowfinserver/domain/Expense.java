@@ -2,24 +2,20 @@ package com.project.flowfinserver.domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Map;
-
 
 @Entity
-@Table(name = "expense",
+@Table(
+        name = "expense",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_expense",
-                columnNames = {"user_id", "transacted_at", "merchant_name", "amount"}
-        ))
+                columnNames = {"user_id", "expense_date", "merchant_name", "amount"}
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Expense {
@@ -31,54 +27,73 @@ public class Expense {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "transacted_at", nullable = false)
-    private LocalDate transactedAt;
-
-    @Column(name = "merchant_name", nullable = false, length = 200)
-    private String merchantName;
+    @Column(name = "card_company", length = 50)
+    private String cardCompany;
 
     @Column(nullable = false)
     private Long amount;
 
-    @Column(name = "card_company", length = 50)
-    private String cardCompany;
+    @Column(name = "merchant_name", nullable = false, length = 255)
+    private String merchantName;
+
+    @Column(name = "expense_date", nullable = false)
+    private LocalDateTime expenseDate;
 
     @Column(name = "category_id")
-    private Long categoryId; // FK to category.id — null이면 미분류
+    private Long categoryId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "classified_by", length = 10)
-    private ClassifiedBy classifiedBy; // 분류 주체 (RULE/AI/USER)
+    private ClassifiedBy classifiedBy;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "expense_type", length = 10)
-    private ExpenseType expenseType = ExpenseType.VARIABLE;
+    @Column(name = "category_confidence")
+    private Integer categoryConfidence;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "raw_data", columnDefinition = "JSON")
-    private Map<String, Object> rawData;
+    @Column(name = "is_user_modified", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean isUserModified;
+
+    @Column(name = "is_excluded", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean isExcluded;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @Builder
-    public Expense(Long userId, LocalDate transactedAt, String merchantName,
-                   Long amount, String cardCompany, Long categoryId,
-                   ClassifiedBy classifiedBy, ExpenseType expenseType, Map<String, Object> rawData) {
-        this.userId = userId;
-        this.transactedAt = transactedAt;
-        this.merchantName = merchantName;
-        this.amount = amount;
-        this.cardCompany = cardCompany;
-        this.categoryId = categoryId;
-        this.classifiedBy = classifiedBy;
-        this.expenseType = expenseType != null ? expenseType : ExpenseType.VARIABLE;
-        this.rawData = rawData;
+    public static Expense create(Long userId, String cardCompany, Long amount,
+                                  String merchantName, LocalDateTime expenseDate,
+                                  Long categoryId, ClassifiedBy classifiedBy,
+                                  Integer categoryConfidence) {
+        Expense expense = new Expense();
+        expense.userId = userId;
+        expense.cardCompany = cardCompany;
+        expense.amount = amount;
+        expense.merchantName = merchantName;
+        expense.expenseDate = expenseDate;
+        expense.categoryId = categoryId;
+        expense.classifiedBy = classifiedBy;
+        expense.categoryConfidence = categoryConfidence;
+        expense.isUserModified = false;
+        expense.isExcluded = false;
+        return expense;
     }
 
-    public void updateCategory(Long categoryId, ClassifiedBy classifiedBy) {
+    // AI/Rule 재분류 — is_user_modified=true 이면 변경 불가
+    public void updateCategory(Long categoryId, ClassifiedBy classifiedBy, Integer categoryConfidence) {
+        if (this.isUserModified) return;
         this.categoryId = categoryId;
         this.classifiedBy = classifiedBy;
+        this.categoryConfidence = categoryConfidence;
+    }
+
+    // 사용자 수동 수정 — 이후 자동 분류로 덮어쓰기 불가
+    public void updateCategoryByUser(Long categoryId) {
+        this.categoryId = categoryId;
+        this.classifiedBy = ClassifiedBy.USER;
+        this.categoryConfidence = null;
+        this.isUserModified = true;
+    }
+
+    public void exclude() {
+        this.isExcluded = true;
     }
 }

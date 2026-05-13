@@ -2,6 +2,7 @@ package com.project.flowfinserver.controller;
 
 import com.project.flowfinserver.dto.CommunityRequest;
 import com.project.flowfinserver.dto.CommunityResponse;
+import com.project.flowfinserver.dto.LikeResponse;
 import com.project.flowfinserver.service.CommunityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -49,5 +50,12 @@ public class CommunityController {
             @RequestHeader("Authorization") String token) {
         communityService.deletePost(id, token);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/like/{id}")
+    public ResponseEntity<LikeResponse> toggleLike(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String token) {
+        return ResponseEntity.ok(communityService.toggleLike(id, token));
     }
 }

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     name             VARCHAR(50)  NOT NULL,
     refresh_token    VARCHAR(500),
     token_expired_at DATETIME,
+    risk_type        VARCHAR(20),
     created_at       DATETIME     DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -125,7 +126,6 @@ CREATE TABLE IF NOT EXISTS asset_item (
 CREATE TABLE IF NOT EXISTS portfolio (
     id                  INT         AUTO_INCREMENT PRIMARY KEY,
     user_id             BIGINT      NOT NULL,
-    risk_type           VARCHAR(20),
     recommended_assets  JSON,
     investable_amount   BIGINT,
     created_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
@@ -234,18 +234,23 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 -- 통신비 (3) — 이동통신·케이블·알뜰폰
 -- ============================================================
 ('SKT',             3, 'EXACT',   100),
-('SK텔레콤',        3, 'CONTAINS', 95),
 ('KT',              3, 'EXACT',   100),
 ('LG유플러스',      3, 'EXACT',   100),
 ('LGU+',            3, 'EXACT',   100),
+('SK브로드밴드',    3, 'EXACT',   100),
+('SK텔레콤',        3, 'CONTAINS', 95),
+('KT인터넷',        3, 'CONTAINS', 90),
+('U+인터넷',        3, 'CONTAINS', 90),
 ('알뜰폰',          3, 'CONTAINS', 85),
 ('스카이라이프',    3, 'CONTAINS', 85),
 ('헬로TV',          3, 'CONTAINS', 85),
 ('딜라이브',        3, 'CONTAINS', 80),
 ('케이블TV',        3, 'CONTAINS', 80),
+('KT',              3, 'CONTAINS',   80),
 ('인터넷전화',      3, 'CONTAINS', 75),
 ('통신요금',        3, 'CONTAINS', 80),
 ('데이터요금',      3, 'CONTAINS', 80),
+
 
 -- ============================================================
 -- 교육비 (4) — 온오프라인 강의, 학원, 서점
@@ -300,6 +305,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('엔제리너스',      5, 'EXACT',   100),
 ('드롭탑',          5, 'EXACT',   100),
 ('쥬씨',            5, 'EXACT',   100),
+
 -- 패스트푸드
 ('맥도날드',        5, 'EXACT',   100),
 ('롯데리아',        5, 'EXACT',   100),
@@ -329,6 +335,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('세븐일레븐',      5, 'EXACT',   100),
 ('이마트24',        5, 'EXACT',   100),
 ('미니스톱',        5, 'EXACT',   100),
+('편의점',        5, 'CONTAINS',   90),
 -- 외식 프랜차이즈
 ('본죽',            5, 'EXACT',   100),
 ('한솥',            5, 'EXACT',   100),
@@ -346,12 +353,20 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('분식',            5, 'CONTAINS', 75),
 -- 업종 키워드 (낮은 우선순위)
 ('카페',            5, 'CONTAINS', 70),
+('커피',        5, 'CONTAINS',   70),
 ('베이커리',        5, 'CONTAINS', 70),
 ('빵집',            5, 'CONTAINS', 70),
 ('식당',            5, 'CONTAINS', 70),
 ('음식점',          5, 'CONTAINS', 70),
 ('포차',            5, 'CONTAINS', 70),
 
+('스타벅스코리아',  5, 'EXACT',   100),  -- 법인명으로 찍히는 경우
+('파리바게뜨',      5, 'EXACT',   100),  -- 베이커리 대표 브랜드
+('뚜레쥬르',        5, 'EXACT',   100),
+('배스킨라빈스',    5, 'EXACT',   100),
+('던킨',            5, 'EXACT',   100),
+('쉐이크쉑',        5, 'EXACT',   100),
+('행복추풍령',      5, 'EXACT',   100),  -- 고속도로 휴게소 주요 운영사
 -- ============================================================
 -- 생활비 (6) — 대형마트, 이커머스, 잡화, 신선식품
 -- ============================================================
@@ -391,6 +406,12 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('따릉이',          7, 'EXACT',   100),
 ('카카오바이크',    7, 'EXACT',   100),
 ('일레클',          7, 'EXACT',   100),
+('우버',            7, 'EXACT',   100),
+('타다',            7, 'EXACT',   100),
+('아이엠택시',      7, 'EXACT',   100),
+('UT',              7, 'EXACT',   100),  -- 우버택시 앱
+('국토교통부',      7, 'CONTAINS', 80),  -- 하이패스 충전
+('한국도로공사',    7, 'CONTAINS', 80),  -- 하이패스·통행료
 -- 주유소
 ('SK에너지',        7, 'EXACT',   100),
 ('GS칼텍스',        7, 'EXACT',   100),
@@ -417,10 +438,12 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('진에어',          7, 'EXACT',   100),
 -- 업종 키워드
 ('지하철',          7, 'CONTAINS', 90),
+('티머니',          7, 'CONTAINS', 90),
 ('버스',            7, 'CONTAINS', 80),
 ('택시',            7, 'CONTAINS', 85),
 ('주유소',          7, 'CONTAINS', 80),
 ('주유',            7, 'CONTAINS', 75),
+('오일',            7, 'CONTAINS', 75),
 ('통행료',          7, 'CONTAINS', 80),
 ('하이패스',        7, 'CONTAINS', 80),
 ('주차',            7, 'CONTAINS', 75),
@@ -471,12 +494,16 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 -- ============================================================
 -- OTT
 ('넷플릭스',        9, 'EXACT',   100),
+('NETFLIX',        9, 'EXACT',   100),
 ('유튜브프리미엄',  9, 'EXACT',   100),
 ('왓챠',            9, 'EXACT',   100),
 ('웨이브',          9, 'EXACT',   100),
 ('티빙',            9, 'EXACT',   100),
 ('디즈니플러스',    9, 'EXACT',   100),
 ('애플TV',          9, 'EXACT',   100),
+('GOOGLE',          9, 'CONTAINS', 80),  -- 단, 구글 결제는 다양해서 신중히
+('구글',            9, 'CONTAINS', 80),
+
 -- 음악 구독
 ('멜론',            9, 'EXACT',   100),
 ('스포티파이',      9, 'EXACT',   100),
@@ -513,6 +540,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('휘트니스',          9, 'CONTAINS', 85),
 ('피트니스',        9, 'CONTAINS', 85),
 ('짐',          9, 'CONTAINS', 80),
+('GYM',          9, 'CONTAINS', 80),
 ('수영장',          9, 'CONTAINS', 80),
 ('스크린골프',      9, 'CONTAINS', 85),
 ('골프',            9, 'CONTAINS', 75),
@@ -521,6 +549,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 -- 테마파크·기타 여가
 ('에버랜드',        9, 'EXACT',   100),
 ('롯데월드',        9, 'EXACT',   100),
+('인터파크',        9, 'EXACT',   100),  -- 공연·여행 예매
 ('키즈카페',        9, 'CONTAINS', 85),
 ('노래방',          9, 'CONTAINS', 85),
 ('방탈출',          9, 'CONTAINS', 85),
@@ -535,6 +564,11 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('교보문고',        9, 'EXACT',   100),
 ('YES24',           9, 'EXACT',   100),
 ('알라딘',          9, 'EXACT',   100),
+-- 미용
+('헤어', 9, 'CONTAINS', 90),
+('미용실', 9, 'CONTAINS', 90),
+
+('PC방', 9, 'CONTAINS', 80),
 
 -- ============================================================
 -- 의료비 (10) — 의원·병원·약국·검진
@@ -549,6 +583,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('정형외과',       10, 'CONTAINS', 90),
 ('내과',           10, 'CONTAINS', 90),
 ('소아과',         10, 'CONTAINS', 90),
+('제약',         10, 'CONTAINS', 90),
 ('산부인과',       10, 'CONTAINS', 90),
 ('이비인후과',     10, 'CONTAINS', 90),
 ('정신건강의학과', 10, 'CONTAINS', 90),

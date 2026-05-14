@@ -36,7 +36,24 @@
       "Bash(curl -s http://localhost:8080/swagger-ui/index.html)",
       "Bash(curl -s http://localhost:8080/v3/api-docs)",
       "Bash(echo \"PID: $!\" sleep 25 grep -E \"\\(Started|ERROR|Exception|swagger\\)\" /tmp/bootrun2.log)",
-      "PowerShell(Get-NetTCPConnection *)"
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(./gradlew compileTestJava)",
+      "Bash(xargs grep *)",
+      "Bash(tasklist *)",
+      "Bash(git stash *)",
+      "Bash(grep -E '\\\\.\\(properties|yml|yaml\\)$')",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(grep -v \"^docker-compose\\\\.yml$\")",
+      "Read(//tmp/**)",
+      "Bash(xargs git *)",
+      "Bash(git restore *)",
+      "Bash(./gradlew compileJava -x test)",
+      "Bash(./gradlew compileJava compileTestJava --no-daemon -q)",
+      "Bash(grep -E \"\\\\.\\(java\\)$\")",
+      "Bash(grep -E '\\\\.\\(properties|yml|yaml\\)$|docker-compose')"
     ]
   }
 }

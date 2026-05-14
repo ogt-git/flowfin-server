@@ -1,7 +1,9 @@
-# CLAUDE.md — FlowFin 개발 지침서
+ㅇ# CLAUDE.md — FlowFin 개발 지침서
 
 > 이 파일은 Claude가 FlowFin 프로젝트의 코드를 작성할 때 반드시 준수해야 할 규칙과 컨텍스트를 정의한다.
 > 모르는 부분은 추측하지 말고 반드시 질문으로 되물어라.
+
+> ⚠️ **커밋·푸시 금지 원칙**: 사용자가 명시적으로 "커밋해줘", "푸시해줘"라고 요청할 때만 실행한다. 코드 작성 완료 후 임의로 커밋·푸시하지 않는다.
 
 ---
 
@@ -146,6 +148,7 @@ private String accountNo;
 | name | VARCHAR(30) | | 이름 |
 | refresh_token | VARCHAR(500) | | Refresh Token (보조용, 주 검증은 Redis) |
 | token_expired_at | DATETIME | | 토큰 만료일시 |
+| risk_type | VARCHAR(20) | | 위험 성향 |
 | created_at | DATETIME | | 가입일시 |
 
 #### Codef_Connection
@@ -218,7 +221,6 @@ private String accountNo;
 |------|------|-----|------|
 | id | INT | PK | 포트폴리오 ID |
 | user_id | BIGINT | FK(User.id) | 사용자 |
-| risk_type | VARCHAR(20) | | 위험 성향 |
 | recommended_assets | JSON | | 추천 자산 배분 (파이 차트 시각화용 구조화 필수) |
 | investable_amount | BIGINT | | 투자 가능 금액 (산출 후 저장) |
 | created_at | DATETIME | | 생성일시 |

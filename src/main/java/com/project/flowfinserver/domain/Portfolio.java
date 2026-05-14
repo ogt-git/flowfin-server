@@ -21,9 +21,6 @@ public class Portfolio {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "risk_type", length = 20)
-    private String riskType;
-
     @Column(name = "recommended_assets", columnDefinition = "JSON")
     private String recommendedAssets;
 
@@ -34,11 +31,9 @@ public class Portfolio {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public static Portfolio create(Long userId, String riskType,
-                                    String recommendedAssets, Long investableAmount) {
+    public static Portfolio create(Long userId, String recommendedAssets, Long investableAmount) {
         Portfolio portfolio = new Portfolio();
         portfolio.userId = userId;
-        portfolio.riskType = riskType;
         portfolio.recommendedAssets = recommendedAssets;
         portfolio.investableAmount = Math.max(0L, investableAmount);
         return portfolio;

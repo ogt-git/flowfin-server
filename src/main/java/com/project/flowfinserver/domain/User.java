@@ -38,6 +38,9 @@ public class User {
     @Column(name = "token_expired_at")
     private LocalDateTime tokenExpiredAt;
 
+    @Column(name = "risk_type", length = 20)
+    private String riskType;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -59,5 +62,9 @@ public class User {
     public void clearRefreshToken() {
         this.refreshToken = null;
         this.tokenExpiredAt = null;
+    }
+
+    public void updateRiskType(String riskType) {
+        this.riskType = riskType;
     }
 }

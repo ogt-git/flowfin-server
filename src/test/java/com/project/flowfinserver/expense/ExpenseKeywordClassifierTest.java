@@ -57,7 +57,7 @@ class ExpenseKeywordClassifierTest {
                 rule("스타벅스",   5L, MatchType.EXACT,    100),
                 rule("넷플릭스",   9L, MatchType.EXACT,    100),
                 rule("이마트",     6L, MatchType.CONTAINS,  90),
-                rule("병원",      10L, MatchType.CONTAINS,  90),
+                rule("강남병원",      10L, MatchType.CONTAINS,  90),
                 rule("넷플릭스",   5L, MatchType.CONTAINS,  90), // EXACT 충돌 테스트용
                 rule("카페",       5L, MatchType.CONTAINS,  85),
                 rule("마트",       7L, MatchType.CONTAINS,  80)

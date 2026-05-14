@@ -53,9 +53,9 @@ class ExpenseSaveServiceTest {
 
     @BeforeEach
     void setUp() {
-        starbucks = new CardBillingDto("0301", 6500L,  "스타벅스",  LocalDateTime.of(2024, 4, 1, 0, 0));
-        coupang   = new CardBillingDto("0301", 35000L, "쿠팡",      LocalDateTime.of(2024, 4, 2, 0, 0));
-        netflix   = new CardBillingDto("0301", 13500L, "넷플릭스",  LocalDateTime.of(2024, 4, 3, 0, 0));
+        starbucks = new CardBillingDto("0301", 6500L,  "스타벅스",  LocalDateTime.of(2024, 4, 1, 0, 0), "1");
+        coupang   = new CardBillingDto("0301", 35000L, "쿠팡",      LocalDateTime.of(2024, 4, 2, 0, 0), "1");
+        netflix   = new CardBillingDto("0301", 13500L, "넷플릭스",  LocalDateTime.of(2024, 4, 3, 0, 0), "1");
     }
 
     // ==================== 정상 저장 ====================

@@ -41,7 +41,7 @@ class ExpenseServiceTest {
 
     @BeforeEach
     void setUp() {
-        dto = new CardBillingDto("0301", 6500L, "스타벅스", LocalDateTime.of(2024, 5, 1, 10, 0));
+        dto = new CardBillingDto("0301", 6500L, "스타벅스", LocalDateTime.of(2024, 5, 1, 10, 0), "1");
     }
 
     @Test

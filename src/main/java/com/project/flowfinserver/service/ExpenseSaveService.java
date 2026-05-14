@@ -45,6 +45,10 @@ public class ExpenseSaveService {
                     result.getClassifiedBy(),
                     result.getConfidence()
             );
+            // 단기카드대출(4) / 장기카드대출(5)은 개인 지출이 아니므로 제외 처리
+            if ("4".equals(item.paymentType()) || "5".equals(item.paymentType())) {
+                expense.exclude();
+            }
 
             try {
                 expenseRepository.save(expense);

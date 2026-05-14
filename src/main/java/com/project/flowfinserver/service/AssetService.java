@@ -49,8 +49,10 @@ public class AssetService {
      */
     @Transactional
     public AssetAccount saveOrUpdateAccount(Long userId, StockAssetDto dto) {
+        // account_no는 AES-256 랜덤 IV 암호화 → JPA WHERE 절로 직접 조회 불가
+        // userId + brokerCode 조합으로 계좌를 식별 (기관당 계좌 1개 기준)
         return assetAccountRepository
-                .findByUserIdAndBrokerCodeAndAccountNo(userId, dto.brokerCode(), dto.accountNo())
+                .findByUserIdAndBrokerCode(userId, dto.brokerCode())
                 .map(existing -> {
                     existing.updateAsset(dto.totalAsset(), dto.depositReceived());
                     log.debug("[Asset] 계좌 업데이트 userId={} broker={}", userId, dto.brokerCode());
@@ -111,6 +113,11 @@ public class AssetService {
                 });
 
         for (StockItemDto itemDto : items) {
+            // itemCode 미제공 기관 존재 — item_name 대체 시 동명 종목 충돌 가능성으로 skip 선택
+            if (itemDto.itemCode() == null || itemDto.itemCode().isBlank()) {
+                log.debug("[AssetItem] itemCode 없음 skip itemName={}", itemDto.itemName());
+                continue;
+            }
             try {
                 assetItemRepository
                         .findByAccountIdAndItemCode(account.getId(), itemDto.itemCode())

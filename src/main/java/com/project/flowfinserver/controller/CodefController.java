@@ -57,16 +57,6 @@ public class CodefController {
         return ResponseEntity.ok(ApiResponse.success(result, message));
     }
 
-    @Operation(summary = "증권 계좌번호 등록", description = "연동된 증권 계정에 계좌번호를 등록합니다. 증권 자산 sync 전에 필요합니다.")
-    @PatchMapping("/connect/stock/account")
-    public ResponseEntity<ApiResponse<Void>> registerStockAccountNumber(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
-            @RequestParam String organization,
-            @RequestParam String accountNumber) {
-        codefService.registerStockAccountNumber(userId, organization, accountNumber);
-        return ResponseEntity.ok(ApiResponse.success(null, "계좌번호가 등록되었습니다."));
-    }
-
     @Operation(summary = "카드 청구 내역 수집 (내부 전용)", description = "CODEF API로 카드 청구 내역을 조회하고 Expense DB에 저장합니다.")
     @PostMapping("/card")
     public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncCard(

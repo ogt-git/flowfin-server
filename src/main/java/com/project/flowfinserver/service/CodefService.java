@@ -13,6 +13,9 @@ import com.project.flowfinserver.exception.CodefApiException;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +31,13 @@ public class CodefService {
 
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
+    private final CodefSyncService codefSyncService;
     private final ObjectMapper objectMapper;
+
+    // self-injection: @Async는 Spring 프록시를 통해야 동작 — 동일 클래스 내 직접 호출 시 비동기 미적용 방지
+    @Lazy
+    @Autowired
+    private CodefService self;
 
     // 카드/증권 계정 연결 (connectedId 발급)
     public String connectAccount(Long userId, CodefConnectRequest request) throws Exception {
@@ -105,9 +114,16 @@ public class CodefService {
                 String organization = account.path("organization").asText();
                 if (!connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountType(
                         userId, organization, accountType)) {
-                    connectedAccountRepository.save(
-                            CodefConnectedAccount.create(userId, connectedId, organization, accountType));
+                    CodefConnectedAccount conn =
+                            CodefConnectedAccount.create(userId, connectedId, organization, accountType);
+                    // STOCK 타입이고 계좌번호가 제공된 경우 즉시 저장 (AesEncryptConverter 자동 암호화)
+                    if (accountType == AccountType.STOCK && hasValue(request.getAccountNumber())) {
+                        conn.updateAccountNumber(request.getAccountNumber());
+                    }
+                    CodefConnectedAccount saved = connectedAccountRepository.save(conn);
                     log.info("[Connect] saved connectedId for org={} type={}", organization, accountType);
+                    // 최초 동기화 비동기 트리거 — 즉시 200 OK 반환 후 별도 스레드에서 실행
+                    self.triggerInitialSync(userId, saved);
                 } else {
                     log.info("[Connect] already exists for org={} type={}", organization, accountType);
                 }
@@ -152,6 +168,43 @@ public class CodefService {
 
         connection.deactivate();
         log.info("[Disconnect] connectionId={} userId={} deactivated", connectionId, userId);
+    }
+
+    /**
+     * 최초 연동 직후 CODEF API를 호출하여 카드 청구 내역 또는 증권 자산을 즉시 수집한다.
+     * @Async — Spring 프록시를 통해 호출되어야 비동기 동작 (self 필드로 호출)
+     */
+    @Async
+    public void triggerInitialSync(Long userId, CodefConnectedAccount connection) {
+        log.info("[InitialSync] 최초 동기화 시작 userId={} org={} type={}",
+                userId, connection.getOrganizationCode(), connection.getAccountType());
+        if (connection.getAccountType() == AccountType.CARD) {
+            fetchAndSaveCardBilling(userId, connection);
+        } else if (connection.getAccountType() == AccountType.STOCK) {
+            fetchAndSaveStockAsset(userId, connection);
+        }
+    }
+
+    private void fetchAndSaveCardBilling(Long userId, CodefConnectedAccount connection) {
+        log.info("[InitialSync] CARD 최초 동기화 시작 userId={} org={}", userId, connection.getOrganizationCode());
+        try {
+            codefSyncService.syncConnection(connection);
+        } catch (Exception e) {
+            log.warn("[InitialSync] CARD 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
+            throw new RuntimeException(e);
+        }
+        log.info("[InitialSync] CARD 최초 동기화 완료 userId={} org={}", userId, connection.getOrganizationCode());
+    }
+
+    private void fetchAndSaveStockAsset(Long userId, CodefConnectedAccount connection) {
+        log.info("[InitialSync] STOCK 최초 동기화 시작 userId={} org={}", userId, connection.getOrganizationCode());
+        try {
+            codefSyncService.syncConnection(connection);
+        } catch (Exception e) {
+            log.warn("[InitialSync] STOCK 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
+            throw new RuntimeException(e);
+        }
+        log.info("[InitialSync] STOCK 최초 동기화 완료 userId={} org={}", userId, connection.getOrganizationCode());
     }
 
     // 증권 계좌번호 등록 (연결 후 별도 등록)

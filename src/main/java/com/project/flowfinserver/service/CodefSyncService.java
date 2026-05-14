@@ -387,8 +387,9 @@ public class CodefSyncService {
             long amount = Long.parseLong(amountStr);
             if (amount <= 0) continue;
 
+            String paymentType = firstNonEmpty(tx, "resPaymentType");
             LocalDateTime expenseDate = LocalDate.parse(dateStr, PARSE_FMT).atStartOfDay();
-            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate));
+            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate, paymentType));
         }
 
         int saved = expenseSaveService.saveExpenses(userId, items);

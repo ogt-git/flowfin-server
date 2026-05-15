@@ -86,6 +86,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage(), ErrorCode.DUPLICATE_EXPENSE.name()));
     }
 
+    // 제외 처리된 지출 카테고리 수정 시도 등 잘못된 상태 전환 → 400
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage(), "INVALID_STATE"));
+    }
+
+    // 날짜 범위 오류(startDate > endDate) 등 잘못된 파라미터 → 400
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<?>> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage(), "INVALID_ARGUMENT"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<?>> handleGeneral(Exception e) {
         log.error("Unhandled exception", e);

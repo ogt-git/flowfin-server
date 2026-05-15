@@ -30,6 +30,7 @@ public class AuthService {
                 .emailHash(emailHash)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
+                .riskType(request.getRiskType())
                 .build();
 
         userRepository.save(user);

@@ -25,9 +25,6 @@ public class Portfolio {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "risk_type", length = 20)
-    private String riskType;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "recommended_assets", columnDefinition = "JSON")
     private Map<String, Object> recommendedAssets;
@@ -40,10 +37,8 @@ public class Portfolio {
     private LocalDateTime createdAt;
 
     @Builder
-    public Portfolio(Long userId, String riskType,
-                     Map<String, Object> recommendedAssets, Long investableAmount) {
+    public Portfolio(Long userId, Map<String, Object> recommendedAssets, Long investableAmount) {
         this.userId = userId;
-        this.riskType = riskType;
         this.recommendedAssets = recommendedAssets;
         this.investableAmount = investableAmount;
     }

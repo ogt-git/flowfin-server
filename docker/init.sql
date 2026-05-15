@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     password     VARCHAR(255)  NOT NULL,
     name         VARCHAR(512)  NOT NULL,
     connected_id VARCHAR(255),
+    risk_type    VARCHAR(20),
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -110,7 +111,6 @@ CREATE TABLE IF NOT EXISTS asset_item (
 CREATE TABLE IF NOT EXISTS portfolio (
     id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id            BIGINT      NOT NULL,
-    risk_type          VARCHAR(20),
     recommended_assets JSON,
     investable_amount  BIGINT,
     created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -221,6 +221,7 @@ private String accountNo;
 |------|------|-----|------|
 | id | INT | PK | 포트폴리오 ID |
 | user_id | BIGINT | FK(User.id) | 사용자 |
+| portfolio_risk_type | VARCHAR(20) | | 추천 당시 투자 성향 (User.risk_type 복사) |
 | recommended_assets | JSON | | 추천 자산 배분 (파이 차트 시각화용 구조화 필수) |
 | investable_amount | BIGINT | | 투자 가능 금액 (산출 후 저장) |
 | created_at | DATETIME | | 생성일시 |
@@ -313,6 +314,10 @@ JPA에서 중복 삽입 시 `DataIntegrityViolationException`을 반드시 catch
 **Portfolio 테이블**
 - 컬럼명은 `investable_amount` (BIGINT) — `total_invest_amount`로 혼용 금지
 - `recommended_assets`: JSON 타입, 파이 차트 파싱 용이하도록 구조화 저장
+- `portfolio_risk_type`: 추천 생성 시점의 User.risk_type을 복사해 저장 — `risk_type`으로 혼용 금지
+  - User.risk_type = 현재 투자성향 / Portfolio.portfolio_risk_type = 추천 당시 적용 성향
+- `risk_type`: 추천 시점의 User.risk_type을 복사해 저장 (스냅샷) — 이후 사용자가 성향을 변경해도 과거 이력에 영향 없음
+- User.risk_type(현재 성향)과 Portfolio.risk_type(추천 당시 성향)은 역할이 다름 — 혼용 금지
 
 **Community 테이블**
 - `like_count`는 `Community_Like` 삽입/삭제 시 함께 업데이트 (정합성 유지)
@@ -527,8 +532,8 @@ DELETE /api/users/{id}           회원 탈퇴       path: id, header: Authoriza
 ```
 GET    /api/users/myprofile      마이페이지 조회  header: Authorization
                                   → 연동 카드·증권 목록, 포트폴리오 이력 포함
-POST   /api/users/tendency       투자성향 설문 저장  body: riskType, investGoal, investPeriod 등
-                                  → Portfolio 추천 전 반드시 선행 호출
+POST   /api/users/tendency       투자성향 저장  body: riskType
+                                  → User.risk_type 업데이트, Portfolio 추천 전 반드시 선행 호출
 ```
 
 #### 💳 CODEF 연동
@@ -554,9 +559,7 @@ PUT    /api/expenses/category/{id} 카테고리 수동 수정  path: id, body: c
                                   ⚠️ 반드시 is_user_modified=true, classified_by='USER' 로 업데이트
 DELETE /api/expenses/delete/{id} 지출 제외 처리   path: id
                                   ⚠️ DB 삭제 금지 — is_excluded=true 소프트 처리만 허용
-                                  (대납·법인카드 등 개인 지출 아닌 건 제외용)
-GET    /api/analysis             지출 분석 리포트  header: Authorization
-                                  → GPT-4 소비패턴 분석, 과소비 카테고리 경고, 절약 제안
+                                  (대납·법인카드 등 개인 지출 아닌 건 제외용)                                 
 ```
 
 #### 📈 자산 (Asset)
@@ -576,8 +579,8 @@ POST   /api/assets/manual        수동 자산 입력   body: assetType(예금|�
 ```
 POST   /api/portfolio/recommend  포트폴리오 추천 생성  body: riskType
                                   → 투자성향(/api/users/tendency) 선행 저장 필요
-                                  → GPT-4 호출 → Portfolio 테이블 저장
-                                     (risk_type, recommended_assets JSON, investable_amount)
+                                  → User.risk_type 기준으로 GPT-4 호출 → Portfolio 테이블 저장
+                                     (portfolio_risk_type, recommended_assets JSON, investable_amount)
 GET    /api/portfolio            포트폴리오 조회       header: Authorization → 최신 추천 결과
 GET    /api/portfolio/history    추천 이력 조회        header: Authorization → 마이페이지용
 ```
@@ -713,7 +716,7 @@ E2E 시나리오 : 로그인→카드연동→지출조회 / 포트폴리오 추
 | 3주 | Sprint 1② | 증권 종합자산→Asset_Account/Item 저장, 대시보드 UI 뼈대, 커뮤니티 CRUD 뼈대 |
 | 4주 | Sprint 2① | Rule-based 분류 엔진, 월별 지출 통계 API, 지출 목록 UI |
 | 5주 | Sprint 2② | 자산 조회 UI, investable_amount 산출, Recharts 시각화 |
-| 6주 | Sprint 3① | AI API 연동, GPT-4 지출 분석 메시지, AI 포트폴리오 추천, Portfolio 저장/이력 조회 |
+| 6주 | Sprint 3① | AI API 연동, AI 포트폴리오 추천, Portfolio 저장/이력 조회 |
 | 7주 | Sprint 3② | 커뮤니티 완성(좋아요/댓글/데이터 공유), 카테고리 수동 수정 UI, UX 고도화 |
 | 8주 | QA & 배포 | 통합/E2E 테스트, 금융 데이터 마스킹 검증, 보안 점검, 운영 배포 |
 
@@ -751,7 +754,14 @@ expenseRepository.delete(expense); // is_excluded = true 소프트 처리만 허
 expense.getTotalInvestAmount(); // ❌ — Portfolio 컬럼명은 investable_amount
 portfolio.getInvestableAmount(); // ✅
 
-// 9. Codef_Connection의 account_number를 account_no로 혼용 금지
+// 9. risk_type 컬럼명 혼용 금지
+portfolio.getRiskType();          // ❌ — Portfolio 엔티티 필드명은 portfolioRiskType
+portfolio.getPortfolioRiskType(); // ✅
+user.getPortfolioRiskType();      // ❌ — User 엔티티 필드명은 riskType
+user.getRiskType();               // ✅
+// (User.risk_type = 현재 투자성향 / Portfolio.portfolio_risk_type = 추천 당시 적용 성향)
+
+// 10. Codef_Connection의 account_number를 account_no로 혼용 금지
 conn.getAccountNo();     // ❌ — Codef_Connection 엔티티 필드명은 accountNumber
 conn.getAccountNumber(); // ✅
 // (Asset_Account의 계좌번호 필드는 accountNo — 두 엔티티의 필드명이 다름에 주의)

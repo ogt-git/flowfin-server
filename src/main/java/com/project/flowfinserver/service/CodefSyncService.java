@@ -46,7 +46,64 @@ public class CodefSyncService {
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate stringRedisTemplate;
 
-    // 수동 새로고침 — Redis 쿨다운 5분
+    // 카드 수동 새로고침 — Redis 쿨다운 5분 (키: codef:refresh:cooldown:{userId}:CARD)
+    public CodefSyncResultDto manualSyncCard(Long userId) {
+        String key = "codef:refresh:cooldown:" + userId + ":CARD";
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+            throw new TooManyRequestsException("새로고침은 5분에 한 번만 가능합니다.");
+        }
+        stringRedisTemplate.opsForValue().set(key, "1", 5, TimeUnit.MINUTES);
+        LocalDateTime nextAvailableAt = LocalDateTime.now().plusMinutes(5);
+
+        CodefSyncResultDto result;
+        try {
+            result = syncCard(userId);
+        } catch (CodefAccountNotFoundException e) {
+            log.info("[ManualSyncCard] 카드 계정 없음 userId={}", userId);
+            result = CodefSyncResultDto.builder()
+                    .savedCount(0).skippedCount(0).failedAccounts(List.of())
+                    .syncedAt(LocalDateTime.now()).build();
+        }
+        return CodefSyncResultDto.builder()
+                .savedCount(result.getSavedCount())
+                .skippedCount(result.getSkippedCount())
+                .failedAccounts(result.getFailedAccounts())
+                .syncedAt(result.getSyncedAt())
+                .accountType("CARD")
+                .nextAvailableAt(nextAvailableAt)
+                .build();
+    }
+
+    // 증권 수동 새로고침 — Redis 쿨다운 5분 (키: codef:refresh:cooldown:{userId}:STOCK)
+    public CodefSyncResultDto manualSyncStock(Long userId) {
+        String key = "codef:refresh:cooldown:" + userId + ":STOCK";
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+            throw new TooManyRequestsException("새로고침은 5분에 한 번만 가능합니다.");
+        }
+        stringRedisTemplate.opsForValue().set(key, "1", 5, TimeUnit.MINUTES);
+        LocalDateTime nextAvailableAt = LocalDateTime.now().plusMinutes(5);
+
+        CodefSyncResultDto result;
+        try {
+            result = syncStock(userId);
+        } catch (CodefAccountNotFoundException e) {
+            log.info("[ManualSyncStock] 증권 계좌 없음 userId={}", userId);
+            result = CodefSyncResultDto.builder()
+                    .savedCount(0).skippedCount(0).failedAccounts(List.of())
+                    .syncedAt(LocalDateTime.now()).build();
+        }
+        return CodefSyncResultDto.builder()
+                .savedCount(result.getSavedCount())
+                .skippedCount(result.getSkippedCount())
+                .failedAccounts(result.getFailedAccounts())
+                .syncedAt(result.getSyncedAt())
+                .accountType("STOCK")
+                .nextAvailableAt(nextAvailableAt)
+                .build();
+    }
+
+    // 수동 새로고침 — Redis 쿨다운 5분 (카드+증권 통합, 레거시)
+    // TODO: /api/codef/sync 엔드포인트 제거 후 이 메서드도 제거할 것
     public CodefSyncResultDto manualSync(Long userId) {
         String key = "codef:refresh:cooldown:" + userId;
         if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {

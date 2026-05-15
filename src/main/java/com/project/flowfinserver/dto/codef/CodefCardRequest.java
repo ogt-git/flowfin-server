@@ -1,5 +1,6 @@
 package com.project.flowfinserver.dto.codef;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,6 +11,11 @@ public class CodefCardRequest {
 
     @NotBlank(message = "connectedId는 필수입니다.")
     private String connectedId;       // CODEF 계정 연결 ID (필수)
+
+    @JsonSetter("connectedId")
+    public void setConnectedId(String connectedId) {
+        this.connectedId = connectedId != null ? connectedId.replaceAll("[\\r\\n\\s]", "") : null;
+    }
 
     @NotBlank(message = "기관 코드는 필수입니다.")
     private String organization;      // 카드사 코드 (필수)

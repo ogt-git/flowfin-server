@@ -107,7 +107,7 @@ public class CodefService {
 
         JsonNode successList = root.path("data").path("successList");
         if (successList.isArray()) {
-            String connectedId = root.path("data").path("connectedId").asText();
+            String connectedId = root.path("data").path("connectedId").asText().replaceAll("[\\r\\n\\s]", "");
             AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
 
             for (JsonNode account : successList) {

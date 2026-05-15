@@ -1,5 +1,6 @@
 package com.project.flowfinserver.service;
 
+import com.project.flowfinserver.cache.ExpenseStatsCacheManager;
 import com.project.flowfinserver.domain.Expense;
 import com.project.flowfinserver.dto.ClassificationResult;
 import com.project.flowfinserver.dto.codef.CardBillingDto;
@@ -10,7 +11,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * CODEF 카드 청구 내역을 분류하여 Expense 테이블에 저장한다.
@@ -25,8 +29,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ExpenseSaveService {
 
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
+
     private final ExpenseRepository expenseRepository;
     private final ExpenseClassificationService classificationService;
+    private final ExpenseStatsCacheManager expenseStatsCacheManager;
 
     @Transactional
     public int saveExpenses(Long userId, List<CardBillingDto> items) {
@@ -41,7 +48,7 @@ public class ExpenseSaveService {
                     item.amount(),
                     item.merchantName(),
                     item.expenseDate(),
-                    result.getCategoryId(),
+                    result.getCategory(), // CHANGED
                     result.getClassifiedBy(),
                     result.getConfidence()
             );
@@ -54,7 +61,7 @@ public class ExpenseSaveService {
                 expenseRepository.save(expense);
                 savedCount++;
                 log.debug("[ExpenseSave] 저장 userId={} merchant={} amount={} category={}",
-                        userId, item.merchantName(), item.amount(), result.getCategoryId());
+                        userId, item.merchantName(), item.amount(), result.getCategory()); // CHANGED
             } catch (DataIntegrityViolationException e) {
                 log.debug("[ExpenseSave] 중복 스킵 userId={} merchant={} date={} amount={}",
                         userId, item.merchantName(), item.expenseDate(), item.amount());
@@ -62,6 +69,18 @@ public class ExpenseSaveService {
         }
 
         log.info("[ExpenseSave] 완료 userId={} 저장={}건 / 전체={}건", userId, savedCount, items.size());
+
+        // 저장된 지출의 월별 통계 캐시 무효화 (여러 달에 걸친 내역일 수 있으므로 월 단위로 수집)
+        if (savedCount > 0) {
+            Set<String> months = new HashSet<>();
+            for (CardBillingDto item : items) {
+                if (item.expenseDate() != null) {
+                    months.add(item.expenseDate().format(MONTH_FMT));
+                }
+            }
+            months.forEach(month -> expenseStatsCacheManager.evict(userId, month));
+        }
+
         return savedCount;
     }
 }

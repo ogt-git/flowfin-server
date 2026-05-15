@@ -39,8 +39,9 @@ public class Expense {
     @Column(name = "expense_date", nullable = false)
     private LocalDateTime expenseDate;
 
-    @Column(name = "category_id")
-    private Long categoryId;
+    @ManyToOne(fetch = FetchType.LAZY) // CHANGED
+    @JoinColumn(name = "category_id")  // CHANGED
+    private Category category;         // CHANGED
 
     @Enumerated(EnumType.STRING)
     @Column(name = "classified_by", length = 10)
@@ -61,7 +62,7 @@ public class Expense {
 
     public static Expense create(Long userId, String cardCompany, Long amount,
                                   String merchantName, LocalDateTime expenseDate,
-                                  Long categoryId, ClassifiedBy classifiedBy,
+                                  Category category, ClassifiedBy classifiedBy, // CHANGED
                                   Integer categoryConfidence) {
         Expense expense = new Expense();
         expense.userId = userId;
@@ -69,7 +70,7 @@ public class Expense {
         expense.amount = amount;
         expense.merchantName = merchantName;
         expense.expenseDate = expenseDate;
-        expense.categoryId = categoryId;
+        expense.category = category; // CHANGED
         expense.classifiedBy = classifiedBy;
         expense.categoryConfidence = categoryConfidence;
         expense.isUserModified = false;
@@ -78,16 +79,16 @@ public class Expense {
     }
 
     // AI/Rule 재분류 — is_user_modified=true 이면 변경 불가
-    public void updateCategory(Long categoryId, ClassifiedBy classifiedBy, Integer categoryConfidence) {
+    public void updateCategory(Category category, ClassifiedBy classifiedBy, Integer categoryConfidence) { // CHANGED
         if (this.isUserModified) return;
-        this.categoryId = categoryId;
+        this.category = category; // CHANGED
         this.classifiedBy = classifiedBy;
         this.categoryConfidence = categoryConfidence;
     }
 
     // 사용자 수동 수정 — 이후 자동 분류로 덮어쓰기 불가
-    public void updateCategoryByUser(Long categoryId) {
-        this.categoryId = categoryId;
+    public void updateCategoryByUser(Category category) { // CHANGED
+        this.category = category; // CHANGED
         this.classifiedBy = ClassifiedBy.USER;
         this.categoryConfidence = null;
         this.isUserModified = true;

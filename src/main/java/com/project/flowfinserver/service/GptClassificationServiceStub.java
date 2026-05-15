@@ -1,6 +1,9 @@
 package com.project.flowfinserver.service;
 
+import com.project.flowfinserver.domain.Category; // CHANGED
 import com.project.flowfinserver.dto.ClassificationResult;
+import com.project.flowfinserver.repository.CategoryRepository; // CHANGED
+import lombok.RequiredArgsConstructor; // CHANGED
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -10,11 +13,15 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor // CHANGED
 public class GptClassificationServiceStub implements GptClassificationService {
+
+    private final CategoryRepository categoryRepository; // CHANGED
 
     @Override
     public ClassificationResult classify(String merchantName, Long amount) {
         log.debug("[GPT-stub] Rule 분류 실패 → 기타지출 fallback merchantName={} amount={}", merchantName, amount);
-        return ClassificationResult.ofFallback();
+        Category fallback = categoryRepository.findById(11L).orElseThrow(); // CHANGED
+        return ClassificationResult.ofFallback(fallback); // CHANGED
     }
 }

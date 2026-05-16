@@ -17,6 +17,7 @@ public class ExpenseStatsResponse {
     private long totalAmount;
     private long fixedAmount;
     private long variableAmount;
-    private long irregularAmount;
+    private long etcAmount;
+    private Double changePercent;
     private List<CategoryStatDto> categoryStats;
 }

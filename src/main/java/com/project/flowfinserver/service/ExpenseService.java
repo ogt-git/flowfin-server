@@ -58,7 +58,7 @@ public class ExpenseService {
         long totalAmount = 0L;
         long fixedAmount = 0L;
         long variableAmount = 0L;
-        long irregularAmount = 0L;
+        long etcAmount = 0L;
         Map<Long, Long> categoryAmountMap = new LinkedHashMap<>();
 
         for (Expense e : expenses) {
@@ -66,12 +66,21 @@ public class ExpenseService {
             ExpenseType type = e.getExpenseType();
             if (type == ExpenseType.FIXED)          fixedAmount += e.getAmount();
             else if (type == ExpenseType.VARIABLE)  variableAmount += e.getAmount();
-            else if (type == ExpenseType.IRREGULAR) irregularAmount += e.getAmount();
+            else if (type == ExpenseType.IRREGULAR) etcAmount += e.getAmount();
 
             if (e.getCategoryId() != null) {
                 categoryAmountMap.merge(e.getCategoryId(), e.getAmount(), Long::sum);
             }
         }
+
+        // 전월 대비 증감률 계산
+        LocalDate prevMonth = LocalDate.of(year, month, 1).minusMonths(1);
+        List<Expense> prevExpenses = expenseRepository.findMonthlyExpenses(
+                userId, prevMonth.getYear(), prevMonth.getMonthValue());
+        long prevTotal = prevExpenses.stream().mapToLong(Expense::getAmount).sum();
+        Double changePercent = prevTotal > 0
+                ? Math.round((totalAmount - prevTotal) * 1000.0 / prevTotal) / 10.0
+                : null;
 
         final long total = totalAmount;
         List<CategoryStatDto> categoryStats = categoryAmountMap.entrySet().stream()
@@ -98,7 +107,8 @@ public class ExpenseService {
                 .totalAmount(totalAmount)
                 .fixedAmount(fixedAmount)
                 .variableAmount(variableAmount)
-                .irregularAmount(irregularAmount)
+                .etcAmount(etcAmount)
+                .changePercent(changePercent)
                 .categoryStats(categoryStats)
                 .build();
 

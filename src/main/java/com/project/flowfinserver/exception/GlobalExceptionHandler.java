@@ -29,8 +29,18 @@ public class GlobalExceptionHandler {
     //데이터 중복 방지 핸들러
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<?>> handleDataIntegrity(DataIntegrityViolationException e) {
+        log.warn("DataIntegrityViolation: {}", e.getMostSpecificCause().getMessage());
+        String message = e.getMostSpecificCause().getMessage();
+        String errorCode;
+        if (message != null && message.contains("uq_expense")) {
+            errorCode = ErrorCode.DUPLICATE_EXPENSE.name();
+            message   = ErrorCode.DUPLICATE_EXPENSE.getMessage();
+        } else {
+            errorCode = "DUPLICATE_DATA";
+            message   = "이미 존재하는 데이터입니다.";
+        }
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error(ErrorCode.DUPLICATE_EXPENSE.getMessage(), ErrorCode.DUPLICATE_EXPENSE.name()));
+                .body(ApiResponse.error(message, errorCode));
     }
 
     //리소스 찾기 실패 핸들러

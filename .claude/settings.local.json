@@ -53,7 +53,20 @@
       "Bash(./gradlew compileJava -x test)",
       "Bash(./gradlew compileJava compileTestJava --no-daemon -q)",
       "Bash(grep -E \"\\\\.\\(java\\)$\")",
-      "Bash(grep -E '\\\\.\\(properties|yml|yaml\\)$|docker-compose')"
+      "Bash(grep -E '\\\\.\\(properties|yml|yaml\\)$|docker-compose')",
+      "Bash(grep -E \"\\\\.\\(yml|yaml|env|properties\\)$|docker|Dockerfile\")",
+      "Bash(xargs file *)",
+      "Bash(grep -E \"\\\\.java$\")",
+      "Bash(xargs ls *)",
+      "Bash(curl -s http://localhost:8080/actuator/health)",
+      "Bash(tail *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/signup -H 'Content-Type: application/json' -d '{\"email\":\"test@flowfin.com\",\"password\":\"Test1234!\",\"name\":\"홍길동\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"test@flowfin.com\",\"password\":\"Test1234!\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/signup -H 'Content-Type: application/json; charset=UTF-8' --data-binary '{\"email\":\"test@flowfin.com\",\"password\":\"Test1234!\",\"name\":\"홍길동\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/signup -H 'Content-Type: application/json' --data-binary @-)",
+      "PowerShell(netstat *)",
+      "PowerShell(taskkill *)"
     ]
   }
 }

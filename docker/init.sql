@@ -4,6 +4,12 @@
 -- 스키마 변경 시: docker-compose down -v && docker-compose up -d
 -- ============================================================
 
+ALTER DATABASE flowfin CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'flowfin-admin'@'%' IDENTIFIED BY 'flowfin1234';
+GRANT ALL PRIVILEGES ON flowfin.* TO 'flowfin-admin'@'%';
+FLUSH PRIVILEGES;
+
 USE flowfin;
 
 -- ============================================================

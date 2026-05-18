@@ -555,6 +555,12 @@ POST   /api/codef/stock          증권 종합자산 수집·Asset_Account/Asset
 GET    /api/expenses             지출 목록 조회   query: startDate, endDate, category(categoryId), page, size
                                   → is_excluded=false 인 건만 반환 (제외 처리된 건 기본 숨김)
 GET    /api/expenses/details/{id} 지출 상세 조회  path: id
+GET    /api/expenses/stats       월별 지출 통계 조회  header: Authorization
+                                  query: month(YYYY-MM, optional — 미입력 시 당월)
+                                  → 월별 총액 + 카테고리별 집계 반환
+                                  → is_excluded=false 건만 집계
+                                  → Redis 캐싱: expense:stats:{userId}:{yyyyMM} TTL 1시간
+                                  ⚠️ month 형식 오류 시 400 + INVALID_MONTH_FORMAT 반환
 PUT    /api/expenses/category/{id} 카테고리 수동 수정  path: id, body: categoryId
                                   ⚠️ 반드시 is_user_modified=true, classified_by='USER' 로 업데이트
 DELETE /api/expenses/delete/{id} 지출 제외 처리   path: id

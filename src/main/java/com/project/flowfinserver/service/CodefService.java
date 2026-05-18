@@ -20,7 +20,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 
@@ -69,12 +72,12 @@ public class CodefService {
 
         if ("0".equals(loginType)) {
             // 인증서 방식 — derFile, keyFile 필수 / certType 하드코딩
-            if (!hasValue(request.getDerFile()) || !hasValue(request.getKeyFile())) {
+            if (!hasValue(request.getDerFileBase64()) || !hasValue(request.getKeyFileBase64())) {
                 throw new IllegalArgumentException("인증서 방식(loginType=0)은 derFile과 keyFile이 필수입니다.");
             }
             accountMap.put("certType", "1");
-            accountMap.put("derFile", request.getDerFile());
-            accountMap.put("keyFile", request.getKeyFile());
+            accountMap.put("derFile", request.getDerFileBase64());
+            accountMap.put("keyFile", request.getKeyFileBase64());
         } else {
             // 아이디/패스워드 방식 — id 필수
             if (!hasValue(request.getId())) {
@@ -108,6 +111,9 @@ public class CodefService {
         JsonNode successList = root.path("data").path("successList");
         if (successList.isArray()) {
             String connectedId = root.path("data").path("connectedId").asText().replaceAll("[\\r\\n\\s]", "");
+            if (connectedId.isEmpty()) {
+                throw new CodefApiException("CONNECTED_ID_EMPTY", "CODEF connectedId가 비어 있습니다. organizationCode=" + request.getOrganization());
+            }
             AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
 
             for (JsonNode account : successList) {
@@ -123,7 +129,12 @@ public class CodefService {
                     CodefConnectedAccount saved = connectedAccountRepository.save(conn);
                     log.info("[Connect] saved connectedId for org={} type={}", organization, accountType);
                     // 최초 동기화 비동기 트리거 — 즉시 200 OK 반환 후 별도 스레드에서 실행
-                    self.triggerInitialSync(userId, saved);
+                    // try-catch: @Async 실패 시에도 connectAccount 응답에 영향 없도록 격리
+                    try {
+                        self.triggerInitialSync(userId, saved);
+                    } catch (Exception e) {
+                        log.warn("[Connect] 최초 동기화 트리거 실패 — 응답에는 영향 없음 userId={} org={}", userId, organization, e);
+                    }
                 } else {
                     log.info("[Connect] already exists for org={} type={}", organization, accountType);
                 }
@@ -248,6 +259,25 @@ public class CodefService {
         if (hasValue(request.getAddPassword()))     params.put("add_password", codefApiClient.encryptRSA(request.getAddPassword()));
 
         return codefApiClient.requestProduct("/v1/kr/stock/a/account/financial-assets", params);
+    }
+
+    // 인증서 파일을 읽어 Base64 인코딩 후 request DTO에 설정
+    public void attachCertFiles(CodefConnectRequest request, MultipartFile derFile, MultipartFile keyFile) throws Exception {
+        validateCertFileExtension(derFile, ".der");
+        validateCertFileExtension(keyFile, ".key");
+        // getMimeEncoder() 사용 금지 — 76자마다 \r\n 삽입으로 CODEF CF-11204 유발
+        request.setDerFileBase64(Base64.getEncoder().encodeToString(derFile.getBytes()));
+        request.setKeyFileBase64(Base64.getEncoder().encodeToString(keyFile.getBytes()));
+    }
+
+    private void validateCertFileExtension(MultipartFile file, String expectedExt) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("인증서 파일이 비어 있습니다: " + expectedExt);
+        }
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || !originalName.toLowerCase().endsWith(expectedExt)) {
+            throw new IllegalArgumentException("허용되지 않는 파일 형식입니다: " + originalName + " (허용: " + expectedExt + ")");
+        }
     }
 
     // CD=카드 → "P"(개인), ST=증권 → "A"(통합)

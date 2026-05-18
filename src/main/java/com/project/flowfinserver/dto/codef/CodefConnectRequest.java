@@ -13,9 +13,9 @@ public class CodefConnectRequest {
     // "0": 인증서 방식, "1": 아이디/패스워드 방식
     private String loginType;
 
-    // 인증서 방식 전용 (loginType "0")
-    private String derFile;   // BASE64 인코딩된 .der 파일
-    private String keyFile;   // BASE64 인코딩된 .key 파일
+    // 인증서 방식 전용 (loginType "0") — 서버에서 파일을 받아 Base64 인코딩한 값
+    private String derFileBase64;
+    private String keyFileBase64;
 
     // 아이디/패스워드 방식 전용 (loginType "1")
     private String id;

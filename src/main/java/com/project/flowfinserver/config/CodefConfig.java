@@ -17,12 +17,17 @@ public class CodefConfig {
     @Value("${codef.public-key}")
     private String publicKey;
 
+    @Value("${codef.service-type:1}")
+    private int serviceType;
 
     @Bean
     public EasyCodef easyCodef() {
         EasyCodef codef = new EasyCodef();
-        codef.setClientInfoForDemo(clientId, clientSecret);
-        codef.setClientInfo(clientId, clientSecret);
+        if (serviceType == 0) {
+            codef.setClientInfo(clientId, clientSecret);
+        } else {
+            codef.setClientInfoForDemo(clientId, clientSecret);
+        }
         codef.setPublicKey(publicKey);
         return codef;
     }

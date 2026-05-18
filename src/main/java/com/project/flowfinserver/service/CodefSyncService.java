@@ -102,44 +102,6 @@ public class CodefSyncService {
                 .build();
     }
 
-    // 수동 새로고침 — Redis 쿨다운 5분 (카드+증권 통합, 레거시)
-    // TODO: /api/codef/sync 엔드포인트 제거 후 이 메서드도 제거할 것
-    public CodefSyncResultDto manualSync(Long userId) {
-        String key = "codef:refresh:cooldown:" + userId;
-        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
-            throw new TooManyRequestsException("새로고침은 5분에 한 번만 가능합니다.");
-        }
-        stringRedisTemplate.opsForValue().set(key, "1", 5, TimeUnit.MINUTES);
-
-        int totalSaved = 0, totalSkipped = 0;
-        List<String> allFailed = new ArrayList<>();
-
-        try {
-            CodefSyncResultDto cardResult = syncCard(userId);
-            totalSaved += cardResult.getSavedCount();
-            totalSkipped += cardResult.getSkippedCount();
-            allFailed.addAll(cardResult.getFailedAccounts());
-        } catch (CodefAccountNotFoundException e) {
-            log.info("[ManualSync] 카드 계정 없음 userId={}", userId);
-        }
-
-        try {
-            CodefSyncResultDto stockResult = syncStock(userId);
-            totalSaved += stockResult.getSavedCount();
-            totalSkipped += stockResult.getSkippedCount();
-            allFailed.addAll(stockResult.getFailedAccounts());
-        } catch (CodefAccountNotFoundException e) {
-            log.info("[ManualSync] 증권 계좌 없음 userId={}", userId);
-        }
-
-        return CodefSyncResultDto.builder()
-                .savedCount(totalSaved)
-                .skippedCount(totalSkipped)
-                .failedAccounts(allFailed)
-                .syncedAt(LocalDateTime.now())
-                .build();
-    }
-
     // 배치 전용 — 단일 연동 계정 동기화
     // TRANSIENT_ERROR → CodefRetryableException (배치가 재시도)
     // 그 외 오류 → handleCodefError에서 처리 후 CodefApiException 또는 CodefAuthException throw
@@ -227,6 +189,66 @@ public class CodefSyncService {
                 .savedCount(savedCount)
                 .skippedCount(skippedCount)
                 .failedAccounts(failedAccounts)
+                .syncedAt(LocalDateTime.now())
+                .build();
+    }
+
+    // 증권 원본 응답 JSON을 직접 받아서 파싱+저장 (CodefController 단건 호출용)
+    public CodefSyncResultDto saveStockFromRawResponse(Long userId, String organizationCode,
+                                                       String rawResponse) throws Exception {
+        JsonNode root = objectMapper.readTree(rawResponse);
+
+        String resultCode = root.path("result").path("code").asText();
+        if (!CODEF_SUCCESS.equals(resultCode)) {
+            String message = root.path("result").path("message").asText();
+            throw new CodefApiException(resultCode, message);
+        }
+
+        JsonNode data = root.path("data");
+        JsonNode itemList = data.path("resItemList");
+
+        long totalAsset = 0L;
+        int skippedCount = 0;
+        List<StockItemDto> items = new ArrayList<>();
+        if (itemList.isArray()) {
+            for (JsonNode item : itemList) {
+                long valuationAmt = parseLongField(item, "resValuationAmt");
+                totalAsset += valuationAmt;
+
+                String itemCode = firstNonEmpty(item, "resItemCode");
+                if (itemCode.isBlank()) {
+                    log.debug("[CODEF] itemCode 없음 skip itemName={}", firstNonEmpty(item, "resItemName"));
+                    skippedCount++;
+                    continue;
+                }
+
+                String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
+                BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
+
+                items.add(new StockItemDto(
+                        firstNonEmpty(item, "resProductType"),
+                        firstNonEmpty(item, "resItemName"),
+                        itemCode,
+                        (int) parseLongField(item, "resQuantity"),
+                        parseLongField(item, "resPurchaseAmount"),
+                        valuationAmt,
+                        parseLongField(item, "resValuationPL"),
+                        earningsRate
+                ));
+            }
+        }
+
+        long depositReceived = parseLongField(data, "resDepositReceived");
+        String accountNo = data.path("resAccount").asText("").trim();
+
+        StockAssetDto assetDto = new StockAssetDto(organizationCode, accountNo, totalAsset, depositReceived);
+        assetService.syncAssetData(userId, assetDto, items);
+
+        log.info("[CODEF] 증권 자산 저장 완료 org={} 종목={}건 skip={}건", organizationCode, items.size(), skippedCount);
+        return CodefSyncResultDto.builder()
+                .savedCount(items.size())
+                .skippedCount(skippedCount)
+                .failedAccounts(List.of())
                 .syncedAt(LocalDateTime.now())
                 .build();
     }
@@ -433,6 +455,8 @@ public class CodefSyncService {
     // 분류(Rule→GPT→Fallback) + 중복 스킵은 ExpenseSaveService 내부에서 처리
     private int[] saveExpensesFromTxArray(Long userId, String organizationCode, JsonNode txArray) {
         List<CardBillingDto> items = new ArrayList<>();
+        int cancelledCount = 0, foreignCount = 0;
+
         for (JsonNode tx : txArray) {
             String dateStr   = firstNonEmpty(tx, "resUsedDate");
             String merchant  = firstNonEmpty(tx, "resMemberStoreName");
@@ -445,9 +469,18 @@ public class CodefSyncService {
             if (amount <= 0) continue;
 
             String paymentType = firstNonEmpty(tx, "resPaymentType");
+            boolean cancelled  = "Y".equalsIgnoreCase(firstNonEmpty(tx, "resCancelYn"));
+            boolean overseas   = "Y".equalsIgnoreCase(firstNonEmpty(tx, "resOverseasYn"));
+            if (cancelled) cancelledCount++;
+            if (overseas)  foreignCount++;
+
             LocalDateTime expenseDate = LocalDate.parse(dateStr, PARSE_FMT).atStartOfDay();
-            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate, paymentType));
+            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate,
+                    paymentType, cancelled, overseas));
         }
+
+        log.info("[CODEF] 청구 내역 파싱 org={} total={} cancelled={} overseas={}",
+                organizationCode, items.size(), cancelledCount, foreignCount);
 
         int saved = expenseSaveService.saveExpenses(userId, items);
         return new int[]{saved, items.size() - saved};

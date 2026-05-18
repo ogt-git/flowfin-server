@@ -35,7 +35,7 @@ public class User {
 
     private String connectedId;
 
-    @Column(name = "risk_type", length = 20)
+    @Column(name = "risk_type", length = 50)
     private String riskType;
 
     @CreationTimestamp

@@ -1,5 +1,7 @@
 package com.project.flowfinserver.dto.codef;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -7,11 +9,19 @@ import lombok.Setter;
 @Setter
 public class CodefCardRequest {
 
+    @NotBlank(message = "connectedId는 필수입니다.")
     private String connectedId;       // CODEF 계정 연결 ID (필수)
+
+    @JsonSetter("connectedId")
+    public void setConnectedId(String connectedId) {
+        this.connectedId = connectedId != null ? connectedId.replaceAll("[\\r\\n\\s]", "") : null;
+    }
+
+    @NotBlank(message = "기관 코드는 필수입니다.")
     private String organization;      // 카드사 코드 (필수)
 
-    private String startDate;         // 청구년월 (YYYYMM), 미입력 시 최근 명세서
-    private String endDate;           // 종료년월 (YYYYMM)
+    private String startDate;         // 청구년월 (YYYYMM), 미입력 시 최근 명세서 조회
+    private String endDate;           // 청구년월 종료 (YYYYMM), 선택
 
     private String birthDate;         // 생년월일 (YYYYMMDD), 일부 기관 필수
 
@@ -19,5 +29,6 @@ public class CodefCardRequest {
     private String cardNo;            // 카드번호 전체
     private String cardPassword;      // 카드비밀번호 앞 2자리 (평문 입력 → 서버에서 RSA 암호화)
 
-    private String memberStoreInfoYN; // 가맹점정보 포함여부 "0":미포함(기본) "1":포함
+    private String inquiryType;        // 조회구분 "0":카드별(기본) "1":전체조회
+    private String memberStoreInfoType; // 가맹점정보 포함여부 "0":미포함(기본) "1":포함
 }

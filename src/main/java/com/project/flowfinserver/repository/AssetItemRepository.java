@@ -3,7 +3,13 @@ package com.project.flowfinserver.repository;
 import com.project.flowfinserver.domain.AssetItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface AssetItemRepository extends JpaRepository<AssetItem, Long> {
+import java.util.List;
+import java.util.Optional;
+
+public interface AssetItemRepository extends JpaRepository<AssetItem, Integer> {
 
     void deleteByAccountId(Long accountId);
+    Optional<AssetItem> findByAccountIdAndItemCode(Integer accountId, String itemCode);
+
+    List<AssetItem> findAllByAccountId(Integer accountId);
 }

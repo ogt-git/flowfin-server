@@ -14,11 +14,13 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @Entity
-@Table(name = "expense",
+@Table(
+        name = "expense",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_expense",
                 columnNames = {"user_id", "expense_date", "merchant_name", "amount"}
-        ))
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Expense {
@@ -31,7 +33,7 @@ public class Expense {
     private Long userId;
 
     @Column(name = "expense_date", nullable = false)
-    private LocalDate expenseDate;
+    private LocalDateTime expenseDate;
 
     @Column(name = "merchant_name", nullable = false, length = 255)
     private String merchantName;
@@ -41,6 +43,10 @@ public class Expense {
 
     @Column(name = "card_company", length = 50)
     private String cardCompany;
+
+    @ManyToOne(fetch = FetchType.LAZY) // CHANGED
+    @JoinColumn(name = "category_id")  // CHANGED
+    private Category category;
 
     @Column(name = "category_id")
     private Long categoryId;
@@ -58,13 +64,14 @@ public class Expense {
     @Column(name = "is_excluded", nullable = false)
     private boolean isExcluded = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "expense_type", length = 10)
-    private ExpenseType expenseType = ExpenseType.VARIABLE;
+    @Column(name = "category_confidence")
+    private Integer categoryConfidence;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "raw_data", columnDefinition = "JSON")
-    private Map<String, Object> rawData;
+    @Column(name = "is_user_modified", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean isUserModified;
+
+    @Column(name = "is_excluded", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean isExcluded;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -89,6 +96,25 @@ public class Expense {
         this.rawData = rawData;
     }
 
+    public static Expense create(Long userId, String cardCompany, Long amount,
+                                 String merchantName, LocalDateTime expenseDate,
+                                 Category category, ClassifiedBy classifiedBy, // CHANGED
+                                 Integer categoryConfidence) {
+        Expense expense = new Expense();
+        expense.userId = userId;
+        expense.cardCompany = cardCompany;
+        expense.amount = amount;
+        expense.merchantName = merchantName;
+        expense.expenseDate = expenseDate;
+        expense.category = category; // CHANGED
+        expense.classifiedBy = classifiedBy;
+        expense.categoryConfidence = categoryConfidence;
+        expense.isUserModified = false;
+        expense.isExcluded = false;
+        return expense;
+    }
+
+
     public void updateCategory(Long categoryId, ClassifiedBy classifiedBy, Integer confidence) {
         this.categoryId = categoryId;
         this.classifiedBy = classifiedBy;
@@ -96,6 +122,22 @@ public class Expense {
         if (classifiedBy == ClassifiedBy.USER) {
             this.isUserModified = true;
         }
+    }
+
+    // AI/Rule 재분류 — is_user_modified=true 이면 변경 불가
+    public void updateCategory(Category category, ClassifiedBy classifiedBy, Integer categoryConfidence) { // CHANGED
+        if (this.isUserModified) return;
+        this.category = category; // CHANGED
+        this.classifiedBy = classifiedBy;
+        this.categoryConfidence = categoryConfidence;
+    }
+
+    // 사용자 수동 수정 — 이후 자동 분류로 덮어쓰기 불가
+    public void updateCategoryByUser(Category category) { // CHANGED
+        this.category = category; // CHANGED
+        this.classifiedBy = ClassifiedBy.USER;
+        this.categoryConfidence = null;
+        this.isUserModified = true;
     }
 
     public void exclude() {

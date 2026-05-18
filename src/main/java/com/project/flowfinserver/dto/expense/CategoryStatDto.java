@@ -17,3 +17,11 @@ public class CategoryStatDto {
     private long amount;
     private double ratio;
 }
+public record CategoryStatDto(
+        int categoryId,
+        String name,
+        String icon,
+        String color,
+        long amount,
+        double ratio
+) {}

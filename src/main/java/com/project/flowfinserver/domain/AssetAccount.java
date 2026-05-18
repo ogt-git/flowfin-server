@@ -3,7 +3,6 @@ package com.project.flowfinserver.domain;
 import com.project.flowfinserver.converter.AesEncryptConverter;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -17,7 +16,7 @@ public class AssetAccount {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Integer id;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -26,7 +25,7 @@ public class AssetAccount {
     private String brokerCode;
 
     @Convert(converter = AesEncryptConverter.class)
-    @Column(name = "account_no", length = 50)
+    @Column(name = "account_no", length = 50, unique = true)
     private String accountNo;
 
     @Column(name = "total_asset")
@@ -39,17 +38,21 @@ public class AssetAccount {
     private LocalDateTime updatedAt;
 
     @Builder
-    public AssetAccount(Long userId, String brokerCode, String accountNo,
-                        Long totalAsset, Long depositReceived) {
-        this.userId = userId;
-        this.brokerCode = brokerCode;
-        this.accountNo = accountNo;
-        this.totalAsset = totalAsset;
-        this.depositReceived = depositReceived;
-        this.updatedAt = LocalDateTime.now();
+    public static AssetAccount create(Long userId, String brokerCode, String accountNo,
+                                       Long totalAsset, Long depositReceived) {
+        AssetAccount account = new AssetAccount();
+        account.userId = userId;
+        account.brokerCode = brokerCode;
+        account.accountNo = accountNo;
+        account.totalAsset = totalAsset;
+        account.depositReceived = depositReceived;
+        account.updatedAt = LocalDateTime.now();
+        return account;
+
+
     }
 
-    public void update(Long totalAsset, Long depositReceived) {
+    public void updateAsset(Long totalAsset, Long depositReceived) {
         this.totalAsset = totalAsset;
         this.depositReceived = depositReceived;
         this.updatedAt = LocalDateTime.now();

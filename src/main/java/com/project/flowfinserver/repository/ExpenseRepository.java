@@ -8,7 +8,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
@@ -21,10 +23,20 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     // 지출 목록 조회 (필터 + 페이지네이션, 제외 항목 제외)
     Page<Expense> findByUserIdAndIsExcludedFalseOrderByExpenseDateDesc(Long userId, Pageable pageable);
+    List<Expense> findByUserIdAndExpenseDateBetween(Long userId, LocalDateTime from, LocalDateTime to);
 
-    // 기간 + 카테고리 필터
-    Page<Expense> findByUserIdAndExpenseDateBetweenAndIsExcludedFalseOrderByExpenseDateDesc(
-            Long userId, LocalDate from, LocalDate to, Pageable pageable);
+    boolean existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
+            Long userId, LocalDateTime expenseDate, String merchantName, Long amount);
+
+    Page<Expense> findAllByUserIdAndIsExcludedFalse(Long userId, Pageable pageable);
+
+    List<Expense> findByUserIdAndCategoryIsNullOrderByExpenseDateDesc(Long userId); // CHANGED
+
+    List<Expense> findByUserIdAndCategoryIdInAndExpenseDateAfter(
+            Long userId, List<Long> categoryIds, LocalDateTime after);
+
+    boolean existsByUserIdAndTransactedAtAndMerchantNameAndAmount(
+            Long userId, LocalDate transactedAt, String merchantName, Long amount);
 
     Page<Expense> findByUserIdAndCategoryIdAndExpenseDateBetweenAndIsExcludedFalseOrderByExpenseDateDesc(
             Long userId, Long categoryId, LocalDate from, LocalDate to, Pageable pageable);
@@ -36,4 +48,46 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     List<Expense> findMonthlyExpenses(@Param("userId") Long userId,
                                       @Param("year") int year,
                                       @Param("month") int month);
+
+    // 목록 조회: 월·카테고리 필터 + 페이지네이션
+    // LEFT JOIN FETCH로 category 즉시 로딩 — countQuery는 JOIN FETCH 불필요
+    @Query(value = "SELECT e FROM Expense e " +
+            "LEFT JOIN FETCH e.category " + // CHANGED
+            "WHERE e.userId = :userId " +
+            "AND e.isExcluded = false " +
+            "AND e.expenseDate BETWEEN :start AND :end " +
+            "AND (:categoryId IS NULL OR e.category.id = :categoryId) " +
+            "ORDER BY e.expenseDate DESC",
+            countQuery = "SELECT COUNT(e) FROM Expense e " +
+                    "WHERE e.userId = :userId " +
+                    "AND e.isExcluded = false " +
+                    "AND e.expenseDate BETWEEN :start AND :end " +
+                    "AND (:categoryId IS NULL OR e.category.id = :categoryId)")
+    Page<Expense> findExpenses(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("categoryId") Long categoryId,
+            Pageable pageable);
+
+    Optional<Expense> findByIdAndUserId(Long id, Long userId);
+
+    // "검토 필요" 배너: confidence < 60, 사용자 미수정, 미제외 건수
+    @Query("SELECT COUNT(e) FROM Expense e " +
+            "WHERE e.userId = :userId " +
+            "AND e.categoryConfidence < 60 " +
+            "AND e.isUserModified = false " +
+            "AND e.isExcluded = false")
+    long countLowConfidenceExpenses(@Param("userId") Long userId);
+
+    // "신규 지출 N건" 배너: 당일 00:00 이후 생성, 사용자 미수정, 미제외 건수
+    @Query("SELECT COUNT(e) FROM Expense e " +
+            "WHERE e.userId = :userId " +
+            "AND e.createdAt >= :startOfDay " +
+            "AND e.isUserModified = false " +
+            "AND e.isExcluded = false")
+    long countNewExpensesSince(@Param("userId") Long userId,
+                               @Param("startOfDay") LocalDateTime startOfDay);
+}
+
 }

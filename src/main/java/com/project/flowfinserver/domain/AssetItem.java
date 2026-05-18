@@ -14,17 +14,18 @@ import java.time.LocalDateTime;
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_asset_item",
                 columnNames = {"account_id", "item_code"}
-        ))
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AssetItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Integer id;
 
     @Column(name = "account_id", nullable = false)
-    private Long accountId;
+    private Integer accountId;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -56,6 +57,23 @@ public class AssetItem {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    public static AssetItem create(Integer accountId, Long userId, String productType,
+                                    String itemName, String itemCode, Integer quantity,
+                                    Long purchaseAmount, Long valuationAmt,
+                                    Long valuationPl, BigDecimal earningsRate) {
+        AssetItem item = new AssetItem();
+        item.accountId = accountId;
+        item.userId = userId;
+        item.productType = productType;
+        item.itemName = itemName;
+        item.itemCode = itemCode;
+        item.quantity = quantity;
+        item.purchaseAmount = purchaseAmount;
+        item.valuationAmt = valuationAmt;
+        item.valuationPl = valuationPl;
+        item.earningsRate = earningsRate;
+        item.updatedAt = LocalDateTime.now();
+        return item;
     @Builder
     public AssetItem(Long accountId, Long userId, String productType, String itemName,
                      String itemCode, Integer quantity, Long purchaseAmount,

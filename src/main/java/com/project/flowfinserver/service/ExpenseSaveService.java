@@ -38,6 +38,7 @@ public class ExpenseSaveService {
     @Transactional
     public int saveExpenses(Long userId, List<CardBillingDto> items) {
         int savedCount = 0;
+        int excludedCount = 0;
 
         for (CardBillingDto item : items) {
             ClassificationResult result = classificationService.classify(item.merchantName(), item.amount());
@@ -48,27 +49,30 @@ public class ExpenseSaveService {
                     item.amount(),
                     item.merchantName(),
                     item.expenseDate(),
-                    result.getCategory(), // CHANGED
+                    result.getCategory(),
                     result.getClassifiedBy(),
                     result.getConfidence()
             );
-            // 단기카드대출(4) / 장기카드대출(5)은 개인 지출이 아니므로 제외 처리
-            if ("4".equals(item.paymentType()) || "5".equals(item.paymentType())) {
+            // 단기카드대출(4) / 장기카드대출(5) / 취소 거래 / 해외 결제 → is_excluded=true 소프트 처리
+            if ("4".equals(item.paymentType()) || "5".equals(item.paymentType())
+                    || item.cancelled() || item.overseas()) {
                 expense.exclude();
+                excludedCount++;
             }
 
             try {
-                expenseRepository.save(expense);
+                expenseRepository.saveAndFlush(expense);
                 savedCount++;
-                log.debug("[ExpenseSave] 저장 userId={} merchant={} amount={} category={}",
-                        userId, item.merchantName(), item.amount(), result.getCategory()); // CHANGED
+                log.debug("[ExpenseSave] 저장 userId={} merchant={} amount={} category={} excluded={}",
+                        userId, item.merchantName(), item.amount(), result.getCategory(), expense.isExcluded());
             } catch (DataIntegrityViolationException e) {
                 log.debug("[ExpenseSave] 중복 스킵 userId={} merchant={} date={} amount={}",
                         userId, item.merchantName(), item.expenseDate(), item.amount());
             }
         }
 
-        log.info("[ExpenseSave] 완료 userId={} 저장={}건 / 전체={}건", userId, savedCount, items.size());
+        log.info("[ExpenseSave] 완료 userId={} 저장={}건 (제외포함) / 전체={}건 / 제외={}건",
+                userId, savedCount, items.size(), excludedCount);
 
         // 저장된 지출의 월별 통계 캐시 무효화 (여러 달에 걸친 내역일 수 있으므로 월 단위로 수집)
         if (savedCount > 0) {

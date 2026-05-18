@@ -64,6 +64,17 @@ public class ExpenseService {
     }
 
     /**
+     * GET /api/expenses/details/{id}
+     * 지출 상세 조회 — 본인 지출만 접근 가능
+     */
+    @Transactional(readOnly = true)
+    public ExpenseResponse getDetail(Long expenseId, Long userId) {
+        Expense expense = expenseRepository.findByIdAndUserId(expenseId, userId)
+                .orElseThrow(() -> new EntityNotFoundException("지출 내역을 찾을 수 없습니다."));
+        return ExpenseResponse.from(expense, expense.getCategory());
+    }
+
+    /**
      * PUT /api/expenses/category/{id}
      * 사용자 수동 카테고리 수정 — classified_by=USER, is_user_modified=true, confidence=null 저장
      */

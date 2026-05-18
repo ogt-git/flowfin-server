@@ -90,6 +90,15 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
+    @Operation(summary = "지출 상세 조회", description = "지출 단건 상세 정보를 반환합니다. 본인 지출만 조회 가능합니다.")
+    @GetMapping("/details/{id}")
+    public ResponseEntity<ApiResponse<ExpenseResponse>> getDetail(
+            @PathVariable Long id,
+            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+        ExpenseResponse response = expenseService.getDetail(id, userId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @Operation(summary = "카테고리 수동 수정", description = "지출 카테고리를 사용자가 직접 수정합니다. 이후 AI/배치 재분류 덮어쓰기가 영구 차단됩니다.")
     @PutMapping("/category/{id}")
     public ResponseEntity<ApiResponse<ExpenseResponse>> updateCategory(

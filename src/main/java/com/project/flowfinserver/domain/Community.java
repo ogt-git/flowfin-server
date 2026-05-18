@@ -1,62 +1,64 @@
 package com.project.flowfinserver.domain;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "community")
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Community {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User author;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 255)
     private String title;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(nullable = false, length = 20)
+    @Column(length = 20)
     private String category;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private int views = 0;
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int views;
 
-    @Column(name = "like_count", nullable = false)
-    @Builder.Default
-    private int likeCount = 0;
-
-    @OneToMany(mappedBy = "community", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @Builder.Default
-    private List<Comment> comments = new ArrayList<>();
+    @Column(name = "like_count", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int likeCount;
 
     @CreationTimestamp
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public void update(String title, String content, String category) {
+    public static Community create(Long userId, String title, String content, String category) {
+        Community community = new Community();
+        community.userId = userId;
+        community.title = title;
+        community.content = content;
+        community.category = category;
+        community.views = 0;
+        community.likeCount = 0;
+        return community;
+    }
+
+    public void update(String title, String content) {
         this.title = title;
         this.content = content;
-        this.category = category;
     }
 
     public void increaseViews() {
@@ -68,6 +70,6 @@ public class Community {
     }
 
     public void decreaseLikeCount() {
-        if (this.likeCount > 0) this.likeCount--;
+        this.likeCount--;
     }
 }

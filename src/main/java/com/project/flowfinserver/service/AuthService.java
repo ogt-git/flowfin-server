@@ -26,12 +26,12 @@ public class AuthService {
             throw new RuntimeException("이미 존재하는 이메일입니다.");
         }
 
-        User user = User.builder()
-                .email(request.getEmail())
-                .emailHash(emailHash)
-                .password(passwordEncoder.encode(request.getPassword()))
-                .name(request.getName())
-                .build();
+        User user = User.create(
+                request.getEmail(),
+                emailHash,
+                passwordEncoder.encode(request.getPassword()),
+                request.getName()
+        );
 
         userRepository.save(user);
     }

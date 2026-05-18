@@ -36,8 +36,15 @@ out/
 ### VS Code ###
 .vscode/
 
-### Yml ###
+### Yml / Yaml ###
 *.yml
+*.yaml
+docker-compose*.yml
+docker-compose*.yaml
+
+### Properties ###
+*.properties
+!gradle/wrapper/gradle-wrapper.properties
 
 ### Env ###
 .env

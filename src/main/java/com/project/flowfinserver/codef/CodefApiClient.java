@@ -39,6 +39,22 @@ public class CodefApiClient {
         return response;
     }
 
+    // 계정 연결 해지
+    public String deleteAccount(HashMap<String, Object> accountMap) throws Exception {
+        log.info("[CODEF] deleteAccount params={}", accountMap);
+        String response = easyCodef.deleteAccount(resolveServiceType(), accountMap);
+        log.info("[CODEF] deleteAccount response={}", response);
+        return response;
+    }
+
+    // 계정 정보 업데이트 (인증 재시도용)
+    public String updateAccount(HashMap<String, Object> accountMap) throws Exception {
+        log.info("[CODEF] updateAccount params={}", accountMap);
+        String response = easyCodef.updateAccount(resolveServiceType(), accountMap);
+        log.info("[CODEF] updateAccount response={}", response);
+        return response;
+    }
+
     // 데이터 조회
     public String requestProduct(String productUrl, HashMap<String, Object> params) throws Exception {
         log.info("[CODEF] url={} params={}", productUrl, params);

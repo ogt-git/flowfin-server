@@ -1,7 +1,9 @@
 package com.project.flowfinserver.domain;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -9,43 +11,43 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "comment")
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Comment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "community_id", nullable = false)
-    private Community community;
+    @Column(name = "community_id", nullable = false)
+    private Long communityId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User author;
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "is_anonymous", nullable = false)
-    @Builder.Default
-    private boolean isAnonymous = false;
+    @Column(name = "is_anonymous", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean isAnonymous;
 
-    @Column(name = "is_deleted", nullable = false)
-    @Builder.Default
-    private boolean isDeleted = false;
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean isDeleted;
 
     @CreationTimestamp
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public void delete() {
-        this.isDeleted = true;
+    public static Comment create(Long communityId, Long userId, String content, boolean isAnonymous) {
+        Comment comment = new Comment();
+        comment.communityId = communityId;
+        comment.userId = userId;
+        comment.content = content;
+        comment.isAnonymous = isAnonymous;
+        comment.isDeleted = false;
+        return comment;
     }
 
-    public void update(String content) {
-        this.content = content;
+    public void softDelete() {
+        this.isDeleted = true;
     }
 }

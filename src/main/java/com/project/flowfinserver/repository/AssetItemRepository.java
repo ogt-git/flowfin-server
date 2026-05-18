@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface AssetItemRepository extends JpaRepository<AssetItem, Integer> {
 
+    void deleteByAccountId(Long accountId);
     Optional<AssetItem> findByAccountIdAndItemCode(Integer accountId, String itemCode);
 
     List<AssetItem> findAllByAccountId(Integer accountId);

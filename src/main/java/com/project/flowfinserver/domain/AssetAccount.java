@@ -37,6 +37,7 @@ public class AssetAccount {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Builder
     public static AssetAccount create(Long userId, String brokerCode, String accountNo,
                                        Long totalAsset, Long depositReceived) {
         AssetAccount account = new AssetAccount();
@@ -47,6 +48,8 @@ public class AssetAccount {
         account.depositReceived = depositReceived;
         account.updatedAt = LocalDateTime.now();
         return account;
+
+
     }
 
     public void updateAsset(Long totalAsset, Long depositReceived) {

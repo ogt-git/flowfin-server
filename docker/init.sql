@@ -23,11 +23,10 @@ CREATE TABLE IF NOT EXISTS users (
     email_hash       VARCHAR(64)  NOT NULL UNIQUE,
     password         VARCHAR(255) NOT NULL,
     name             VARCHAR(50)  NOT NULL,
-    refresh_token    VARCHAR(500),
-    token_expired_at DATETIME,
-    risk_type        VARCHAR(20),
-    created_at       DATETIME     DEFAULT CURRENT_TIMESTAMP
-);
+    connected_id VARCHAR(255),
+    risk_type    VARCHAR(50),
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
 
 -- 카테고리
 CREATE TABLE IF NOT EXISTS category (
@@ -76,6 +75,7 @@ CREATE TABLE IF NOT EXISTS expense (
     is_user_modified   TINYINT(1)   NOT NULL DEFAULT 0,
     is_excluded        TINYINT(1)   NOT NULL DEFAULT 0,
     created_at         DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    expense_type        ENUM('FIXED','VARIABLE','IRREGULAR') DEFAULT 'VARIABLE',
     UNIQUE KEY uq_expense (user_id, expense_date, merchant_name, amount),
     FOREIGN KEY (user_id)     REFERENCES users (id),
     FOREIGN KEY (category_id) REFERENCES category (id)
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS asset_account (
     id               INT         AUTO_INCREMENT PRIMARY KEY,
     user_id          BIGINT      NOT NULL,
     broker_code      VARCHAR(20),
-    account_no       VARCHAR(50) UNIQUE,
+    account_no       VARCHAR(50) ,
     total_asset      BIGINT,
     deposit_received BIGINT,
     updated_at       DATETIME,

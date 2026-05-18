@@ -2,11 +2,15 @@ package com.project.flowfinserver.domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Entity
 @Table(name = "portfolio")
@@ -21,8 +25,9 @@ public class Portfolio {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "recommended_assets", columnDefinition = "JSON")
-    private String recommendedAssets;
+    private Map<String, Object> recommendedAssets;
 
     @Column(name = "investable_amount")
     private Long investableAmount;
@@ -41,5 +46,10 @@ public class Portfolio {
 
     public void updateInvestableAmount(Long amount) {
         this.investableAmount = Math.max(0L, amount);
+    @Builder
+    public Portfolio(Long userId, Map<String, Object> recommendedAssets, Long investableAmount) {
+        this.userId = userId;
+        this.recommendedAssets = recommendedAssets;
+        this.investableAmount = investableAmount;
     }
 }

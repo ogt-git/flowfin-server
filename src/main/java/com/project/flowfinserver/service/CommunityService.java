@@ -1,10 +1,15 @@
 package com.project.flowfinserver.service;
 
 import com.project.flowfinserver.domain.Community;
+import com.project.flowfinserver.domain.CommunityLike;
 import com.project.flowfinserver.domain.User;
 import com.project.flowfinserver.dto.CommunityRequest;
 import com.project.flowfinserver.dto.CommunityResponse;
+import com.project.flowfinserver.dto.LikeResponse;
+import com.project.flowfinserver.exception.CommunityNotFoundException;
+import com.project.flowfinserver.exception.UnauthorizedException;
 import com.project.flowfinserver.jwt.JwtUtil;
+import com.project.flowfinserver.repository.CommunityLikeRepository;
 import com.project.flowfinserver.repository.CommunityRepository;
 import com.project.flowfinserver.repository.UserRepository;
 import com.project.flowfinserver.util.AesEncryptionUtil;
@@ -13,12 +18,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class CommunityService {
 
     private final CommunityRepository communityRepository;
+    private final CommunityLikeRepository communityLikeRepository;
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final AesEncryptionUtil encryptionUtil;
@@ -42,7 +49,7 @@ public class CommunityService {
     @Transactional
     public CommunityResponse getPost(Long id) {
         Community community = communityRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new CommunityNotFoundException(id));
         community.increaseViews();
         return new CommunityResponse(community);
     }
@@ -50,8 +57,12 @@ public class CommunityService {
     @Transactional
     public CommunityResponse createPost(CommunityRequest request, String token) {
         User user = getUserFromToken(token);
-        Community community = Community.create(
-                user.getId(), request.getTitle(), request.getContent(), request.getCategory());
+        Community community = Community.builder()
+                .author(user)
+                .title(request.getTitle())
+                .content(request.getContent())
+                .category(request.getCategory())
+                .build();
         return new CommunityResponse(communityRepository.save(community));
     }
 
@@ -59,13 +70,13 @@ public class CommunityService {
     public CommunityResponse updatePost(Long id, CommunityRequest request, String token) {
         User user = getUserFromToken(token);
         Community community = communityRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new CommunityNotFoundException(id));
 
-        if (!community.getUserId().equals(user.getId())) {
-            throw new RuntimeException("수정 권한이 없습니다.");
+        if (!community.getAuthor().getId().equals(user.getId())) {
+            throw new UnauthorizedException("수정 권한이 없습니다.");
         }
 
-        community.update(request.getTitle(), request.getContent());
+        community.update(request.getTitle(), request.getContent(), request.getCategory());
         return new CommunityResponse(community);
     }
 
@@ -73,13 +84,31 @@ public class CommunityService {
     public void deletePost(Long id, String token) {
         User user = getUserFromToken(token);
         Community community = communityRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new CommunityNotFoundException(id));
 
-        if (!community.getUserId().equals(user.getId())) {
-            throw new RuntimeException("삭제 권한이 없습니다.");
+        if (!community.getAuthor().getId().equals(user.getId())) {
+            throw new UnauthorizedException("삭제 권한이 없습니다.");
         }
 
         communityRepository.delete(community);
+    }
+
+    @Transactional
+    public LikeResponse toggleLike(Long communityId, String token) {
+        User user = getUserFromToken(token);
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new CommunityNotFoundException(communityId));
+
+        if (communityLikeRepository.findByUserAndCommunity(user, community).isPresent()) {
+            return new LikeResponse(true, community.getLikeCount());
+        }
+
+        communityLikeRepository.save(CommunityLike.builder()
+                .user(user)
+                .community(community)
+                .build());
+        community.increaseLikeCount();
+        return new LikeResponse(true, community.getLikeCount());
     }
 
     private User getUserFromToken(String token) {

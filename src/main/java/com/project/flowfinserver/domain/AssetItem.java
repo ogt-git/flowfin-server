@@ -2,6 +2,7 @@ package com.project.flowfinserver.domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -9,8 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "asset_item",
+@Table(name = "asset_item",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_asset_item",
                 columnNames = {"account_id", "item_code"}
@@ -39,7 +39,7 @@ public class AssetItem {
     @Column(name = "item_code", length = 20)
     private String itemCode;
 
-    @Column
+    @Column(name = "quantity")
     private Integer quantity;
 
     @Column(name = "purchase_amount")
@@ -74,6 +74,21 @@ public class AssetItem {
         item.earningsRate = earningsRate;
         item.updatedAt = LocalDateTime.now();
         return item;
+    @Builder
+    public AssetItem(Long accountId, Long userId, String productType, String itemName,
+                     String itemCode, Integer quantity, Long purchaseAmount,
+                     Long valuationAmt, Long valuationPl, BigDecimal earningsRate) {
+        this.accountId = accountId;
+        this.userId = userId;
+        this.productType = productType;
+        this.itemName = itemName;
+        this.itemCode = itemCode;
+        this.quantity = quantity;
+        this.purchaseAmount = purchaseAmount;
+        this.valuationAmt = valuationAmt;
+        this.valuationPl = valuationPl;
+        this.earningsRate = earningsRate;
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void update(Integer quantity, Long purchaseAmount, Long valuationAmt,

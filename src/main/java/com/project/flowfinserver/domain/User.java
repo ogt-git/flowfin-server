@@ -8,11 +8,14 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import lombok.*;
+
 
 @Entity
 @Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 public class User {
 
     @Id
@@ -23,6 +26,7 @@ public class User {
     @Column(nullable = false, length = 512)
     private String email;
 
+    // 이메일 조회용 SHA-256 해시 (AES는 매번 다른 암호문 생성 → WHERE 절 불가)
     @Column(name = "email_hash", nullable = false, unique = true, length = 64)
     private String emailHash;
 
@@ -32,13 +36,15 @@ public class User {
     @Column(nullable = false, length = 50)
     private String name;
 
+    private String connectedId;
+
     @Column(name = "refresh_token", length = 500)
     private String refreshToken;
 
     @Column(name = "token_expired_at")
     private LocalDateTime tokenExpiredAt;
 
-    @Column(name = "risk_type", length = 20)
+    @Column(name = "risk_type", length = 50)
     private String riskType;
 
     @CreationTimestamp
@@ -64,7 +70,8 @@ public class User {
         this.tokenExpiredAt = null;
     }
 
-    public void updateRiskType(String riskType) {
-        this.riskType = riskType;
+
+    public void updateConnectedId(String connectedId) {
+        this.connectedId = connectedId;
     }
 }

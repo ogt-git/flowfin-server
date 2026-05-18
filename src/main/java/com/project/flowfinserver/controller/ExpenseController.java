@@ -14,9 +14,14 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -25,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
 import java.util.regex.Pattern;
+
 
 @Tag(name = "Expense", description = "지출 내역 조회 및 카테고리 수정 API")
 @RestController
@@ -36,31 +42,18 @@ public class ExpenseController {
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseService expenseService;
+    private static final DateTimeFormatter YYYYMM = DateTimeFormatter.ofPattern("yyyyMM");
     private final ExpenseQueryService expenseQueryService;
     private final ExpenseStatsService expenseStatsService;
 
-    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환.")
-    @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false) Integer categoryId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
-
-        if (categoryId != null && (categoryId < 1 || categoryId > 11)) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("카테고리 ID는 1~11 사이여야 합니다.", "INVALID_CATEGORY_ID"));
-        }
-
-        LocalDate start = startDate != null ? startDate : LocalDate.now().withDayOfMonth(1);
-        LocalDate end   = endDate   != null ? endDate   : LocalDate.now();
-
-        PageResponse<ExpenseListItemDto> result = expenseQueryService.getExpenses(
-                userId, start, end, categoryId, PageRequest.of(page, size));
-
-        return ResponseEntity.ok(ApiResponse.success(result));
+    @Operation(summary = "월별 지출 통계", description = "month=YYYYMM 형식. Redis 1시간 캐싱 적용.")
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<ExpenseStatsResponse>> getMonthlyStats(
+            @RequestParam String month,
+            Authentication authentication) {
+        YearMonth ym = YearMonth.parse(month, YYYYMM);
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(ApiResponse.ok(expenseService.getMonthlyStats(userId, ym.getYear(), ym.getMonthValue())));
     }
 
     @Operation(summary = "월별 지출 통계 조회", description = "월별 총액·카테고리별 집계. month 미입력 시 당월 기본값.")
@@ -89,6 +82,33 @@ public class ExpenseController {
         MonthlyStatsResponse result = expenseStatsService.getMonthlyStats(userId, month);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
+
+
+    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+
+        if (categoryId != null && (categoryId < 1 || categoryId > 11)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("카테고리 ID는 1~11 사이여야 합니다.", "INVALID_CATEGORY_ID"));
+        }
+
+        LocalDate start = startDate != null ? startDate : LocalDate.now().withDayOfMonth(1);
+        LocalDate end   = endDate   != null ? endDate   : LocalDate.now();
+
+        PageResponse<ExpenseListItemDto> result = expenseQueryService.getExpenses(
+                userId, start, end, categoryId, PageRequest.of(page, size));
+
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+
 
     @Operation(summary = "지출 상세 조회", description = "지출 단건 상세 정보를 반환합니다. 본인 지출만 조회 가능합니다.")
     @GetMapping("/details/{id}")

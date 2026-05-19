@@ -2,7 +2,6 @@ package com.project.flowfinserver.domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
@@ -36,7 +35,7 @@ public class Portfolio {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public static Portfolio create(Long userId, String recommendedAssets, Long investableAmount) {
+    public static Portfolio create(Long userId,  Map<String, Object> recommendedAssets, Long investableAmount) {
         Portfolio portfolio = new Portfolio();
         portfolio.userId = userId;
         portfolio.recommendedAssets = recommendedAssets;
@@ -46,10 +45,7 @@ public class Portfolio {
 
     public void updateInvestableAmount(Long amount) {
         this.investableAmount = Math.max(0L, amount);
-    @Builder
-    public Portfolio(Long userId, Map<String, Object> recommendedAssets, Long investableAmount) {
-        this.userId = userId;
-        this.recommendedAssets = recommendedAssets;
-        this.investableAmount = investableAmount;
     }
+    
+    
 }

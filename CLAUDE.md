@@ -572,8 +572,6 @@ DELETE /api/expenses/delete/{id} 지출 제외 처리   path: id
 ```
 GET    /api/stocks               증권 자산 조회   header: Authorization
                                   → Asset_Account + Asset_Item 조인 응답
-POST   /api/stocks               증권 자산 저장   body: organization, accountNo, depositReceived, itemList[]
-                                  → CODEF 연동 후 내부 저장용 (account_no AES-256 암호화 저장)
 GET    /api/assets/summary       총 자산 요약     header: Authorization
                                   → 증권 자산(Asset_Account) + 수동 입력 자산 합산
                                   → investable_amount 자동 산출 포함

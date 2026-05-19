@@ -7,7 +7,6 @@ import com.project.flowfinserver.dto.codef.CardBillingDto;
 import com.project.flowfinserver.repository.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,15 +59,18 @@ public class ExpenseSaveService {
                 excludedCount++;
             }
 
-            try {
-                expenseRepository.saveAndFlush(expense);
-                savedCount++;
-                log.debug("[ExpenseSave] 저장 userId={} merchant={} amount={} category={} excluded={}",
-                        userId, item.merchantName(), item.amount(), result.getCategory(), expense.isExcluded());
-            } catch (DataIntegrityViolationException e) {
+            boolean duplicate = expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
+                    userId, item.expenseDate(), item.merchantName(), item.amount());
+            if (duplicate) {
                 log.debug("[ExpenseSave] 중복 스킵 userId={} merchant={} date={} amount={}",
                         userId, item.merchantName(), item.expenseDate(), item.amount());
+                continue;
             }
+
+            expenseRepository.save(expense);
+            savedCount++;
+            log.debug("[ExpenseSave] 저장 userId={} merchant={} amount={} category={} excluded={}",
+                    userId, item.merchantName(), item.amount(), result.getCategory(), expense.isExcluded());
         }
 
         log.info("[ExpenseSave] 완료 userId={} 저장={}건 (제외포함) / 전체={}건 / 제외={}건",

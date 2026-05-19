@@ -6,6 +6,7 @@ import com.project.flowfinserver.dto.LoginResponse;
 import com.project.flowfinserver.dto.SignupRequest;
 import com.project.flowfinserver.jwt.JwtUtil;
 import com.project.flowfinserver.repository.UserRepository;
+import com.project.flowfinserver.service.RedisTokenService;
 import com.project.flowfinserver.util.AesEncryptionUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ class AuthServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtUtil jwtUtil;
     @Mock AesEncryptionUtil encryptionUtil;
+    @Mock RedisTokenService redisTokenService;
 
     @InjectMocks
     AuthService authService;
@@ -85,12 +87,13 @@ class AuthServiceTest {
         given(encryptionUtil.hash("test@flowfin.test")).willReturn("hashed-email");
         given(userRepository.findByEmailHash("hashed-email")).willReturn(Optional.of(storedUser));
         given(passwordEncoder.matches("raw-password", "encoded-pw")).willReturn(true);
-        given(jwtUtil.generateToken("test@flowfin.test")).willReturn("jwt-token-value");
+        given(jwtUtil.generateAccessToken(eq("test@flowfin.test"), anyLong())).willReturn("access-token");
+        given(jwtUtil.generateRefreshToken("test@flowfin.test")).willReturn("refresh-token");
 
         LoginResponse response = authService.login(request);
 
         assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getToken()).isEqualTo("jwt-token-value");
+        assertThat(response.getAccessToken()).isEqualTo("access-token");
         assertThat(response.getName()).isEqualTo("홍길동");
     }
 

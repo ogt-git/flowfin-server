@@ -7,52 +7,25 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+
+
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
-    List<Expense> findByUserIdAndExpenseDateBetween(Long userId, LocalDate from, LocalDate to);
-
-    boolean existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-            Long userId, LocalDate expenseDate, String merchantName, Long amount);
-
-    List<Expense> findByUserIdAndCategoryIdIsNullOrderByExpenseDateDesc(Long userId);
-
-    // 지출 목록 조회 (필터 + 페이지네이션, 제외 항목 제외)
-    Page<Expense> findByUserIdAndIsExcludedFalseOrderByExpenseDateDesc(Long userId, Pageable pageable);
     List<Expense> findByUserIdAndExpenseDateBetween(Long userId, LocalDateTime from, LocalDateTime to);
 
     boolean existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
             Long userId, LocalDateTime expenseDate, String merchantName, Long amount);
 
-    Page<Expense> findAllByUserIdAndIsExcludedFalse(Long userId, Pageable pageable);
-
-    List<Expense> findByUserIdAndCategoryIsNullOrderByExpenseDateDesc(Long userId); // CHANGED
-
-    List<Expense> findByUserIdAndCategoryIdInAndExpenseDateAfter(
-            Long userId, List<Long> categoryIds, LocalDateTime after);
-
-    boolean existsByUserIdAndTransactedAtAndMerchantNameAndAmount(
-            Long userId, LocalDate transactedAt, String merchantName, Long amount);
-
-    Page<Expense> findByUserIdAndCategoryIdAndExpenseDateBetweenAndIsExcludedFalseOrderByExpenseDateDesc(
-            Long userId, Long categoryId, LocalDate from, LocalDate to, Pageable pageable);
-
-    // 월별 지출 통계용
-    @Query("SELECT e FROM Expense e WHERE e.userId = :userId " +
-           "AND YEAR(e.expenseDate) = :year AND MONTH(e.expenseDate) = :month " +
-           "AND e.isExcluded = false")
-    List<Expense> findMonthlyExpenses(@Param("userId") Long userId,
-                                      @Param("year") int year,
-                                      @Param("month") int month);
+    List<Expense> findByUserIdAndCategoryIsNullOrderByExpenseDateDesc(Long userId);
 
     // 목록 조회: 월·카테고리 필터 + 페이지네이션
     // LEFT JOIN FETCH로 category 즉시 로딩 — countQuery는 JOIN FETCH 불필요
     @Query(value = "SELECT e FROM Expense e " +
-            "LEFT JOIN FETCH e.category " + // CHANGED
+            "LEFT JOIN FETCH e.category " +
             "WHERE e.userId = :userId " +
             "AND e.isExcluded = false " +
             "AND e.expenseDate BETWEEN :start AND :end " +
@@ -72,6 +45,9 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     Optional<Expense> findByIdAndUserId(Long id, Long userId);
 
+    // AssetService.computeFixedMonthlyAvg — category.id IN (:ids) AND expenseDate > :after
+    List<Expense> findByUserIdAndCategoryIdInAndExpenseDateAfter(Long userId, List<Long> categoryIds, LocalDateTime after);
+
     // "검토 필요" 배너: confidence < 60, 사용자 미수정, 미제외 건수
     @Query("SELECT COUNT(e) FROM Expense e " +
             "WHERE e.userId = :userId " +
@@ -88,6 +64,4 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
             "AND e.isExcluded = false")
     long countNewExpensesSince(@Param("userId") Long userId,
                                @Param("startOfDay") LocalDateTime startOfDay);
-}
-
 }

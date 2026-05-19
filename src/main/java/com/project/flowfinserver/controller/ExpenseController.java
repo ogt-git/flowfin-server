@@ -10,14 +10,9 @@ import com.project.flowfinserver.service.ExpenseQueryService;
 import com.project.flowfinserver.service.ExpenseService;
 import com.project.flowfinserver.service.ExpenseStatsService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -42,32 +37,21 @@ public class ExpenseController {
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseService expenseService;
-    private static final DateTimeFormatter YYYYMM = DateTimeFormatter.ofPattern("yyyyMM");
     private final ExpenseQueryService expenseQueryService;
     private final ExpenseStatsService expenseStatsService;
-
-    @Operation(summary = "월별 지출 통계", description = "month=YYYYMM 형식. Redis 1시간 캐싱 적용.")
-    @GetMapping("/stats")
-    public ResponseEntity<ApiResponse<ExpenseStatsResponse>> getMonthlyStats(
-            @RequestParam String month,
-            Authentication authentication) {
-        YearMonth ym = YearMonth.parse(month, YYYYMM);
-        Long userId = (Long) authentication.getPrincipal();
-        return ResponseEntity.ok(ApiResponse.ok(expenseService.getMonthlyStats(userId, ym.getYear(), ym.getMonthValue())));
-    }
 
     @Operation(summary = "월별 지출 통계 조회", description = "월별 총액·카테고리별 집계. month 미입력 시 당월 기본값.")
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<MonthlyStatsResponse>> getMonthlyStats(
             @RequestParam(required = false) String month,
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
 
-        // month 기본값: 당월
+        Long userId = (Long) authentication.getPrincipal();
+
         if (month == null || month.isBlank()) {
             month = YearMonth.now().format(MONTH_FMT);
         }
 
-        // 형식 검증: 정규식 + YearMonth.parse 이중 체크
         if (!MONTH_PATTERN.matcher(month).matches()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("month 형식은 YYYY-MM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
@@ -83,7 +67,6 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-
     @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환.")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
@@ -92,7 +75,9 @@ public class ExpenseController {
             @RequestParam(required = false) Integer categoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
+
+        Long userId = (Long) authentication.getPrincipal();
 
         if (categoryId != null && (categoryId < 1 || categoryId > 11)) {
             return ResponseEntity.badRequest()
@@ -108,13 +93,12 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-
-
     @Operation(summary = "지출 상세 조회", description = "지출 단건 상세 정보를 반환합니다. 본인 지출만 조회 가능합니다.")
     @GetMapping("/details/{id}")
     public ResponseEntity<ApiResponse<ExpenseResponse>> getDetail(
             @PathVariable Long id,
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         ExpenseResponse response = expenseService.getDetail(id, userId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -124,7 +108,8 @@ public class ExpenseController {
     public ResponseEntity<ApiResponse<ExpenseResponse>> updateCategory(
             @PathVariable Long id,
             @RequestBody @Valid CategoryUpdateRequest request,
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         ExpenseResponse response = expenseService.updateCategory(id, userId, request.getCategoryId());
         return ResponseEntity.ok(ApiResponse.success(response, "카테고리가 수정되었습니다."));
     }
@@ -133,7 +118,8 @@ public class ExpenseController {
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<ApiResponse<Void>> excludeExpense(
             @PathVariable Long id,
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         expenseService.exclude(id, userId);
         return ResponseEntity.ok(ApiResponse.success(null, "지출이 제외 처리되었습니다."));
     }
@@ -141,7 +127,8 @@ public class ExpenseController {
     @Operation(summary = "검토 필요 건수 조회", description = "AI 분류 신뢰도 60 미만이고 사용자가 아직 수정하지 않은 지출 건수를 반환합니다.")
     @GetMapping("/review-count")
     public ResponseEntity<ApiResponse<Map<String, Integer>>> getReviewCount(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         int count = expenseService.getLowConfidenceCount(userId);
         return ResponseEntity.ok(ApiResponse.success(Map.of("count", count)));
     }
@@ -149,7 +136,8 @@ public class ExpenseController {
     @Operation(summary = "신규 지출 건수 조회", description = "오늘 00:00:00 이후 생성된 신규 지출 건수를 반환합니다. 배치 및 수동 새로고침으로 추가된 건 모두 포함합니다.")
     @GetMapping("/new-count")
     public ResponseEntity<ApiResponse<Map<String, Integer>>> getNewCount(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         int count = expenseService.getNewExpenseCount(userId);
         return ResponseEntity.ok(ApiResponse.success(Map.of("count", count)));
     }

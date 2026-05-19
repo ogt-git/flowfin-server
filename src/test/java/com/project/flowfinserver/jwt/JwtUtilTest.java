@@ -25,23 +25,23 @@ class JwtUtilTest {
     }
 
     @Test
-    @DisplayName("generateToken — 비어있지 않은 토큰 반환")
+    @DisplayName("generateRefreshToken — 비어있지 않은 토큰 반환")
     void generateToken_returnsNonNullToken() {
-        String token = jwtUtil.generateToken(TEST_EMAIL);
+        String token = jwtUtil.generateRefreshToken(TEST_EMAIL);
         assertThat(token).isNotBlank();
     }
 
     @Test
     @DisplayName("getEmail — 생성된 토큰에서 이메일 파싱 성공")
     void getEmail_extractsCorrectEmail() {
-        String token = jwtUtil.generateToken(TEST_EMAIL);
+        String token = jwtUtil.generateRefreshToken(TEST_EMAIL);
         assertThat(jwtUtil.getEmail(token)).isEqualTo(TEST_EMAIL);
     }
 
     @Test
     @DisplayName("isValid — 유효한 토큰: true")
     void isValid_validToken_returnsTrue() {
-        String token = jwtUtil.generateToken(TEST_EMAIL);
+        String token = jwtUtil.generateRefreshToken(TEST_EMAIL);
         assertThat(jwtUtil.isValid(token)).isTrue();
     }
 

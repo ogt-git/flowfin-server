@@ -57,12 +57,7 @@ public class CommunityService {
     @Transactional
     public CommunityResponse createPost(CommunityRequest request, String token) {
         User user = getUserFromToken(token);
-        Community community = Community.builder()
-                .author(user)
-                .title(request.getTitle())
-                .content(request.getContent())
-                .category(request.getCategory())
-                .build();
+        Community community = Community.create(user.getId(), request.getTitle(), request.getContent(), request.getCategory());
         return new CommunityResponse(communityRepository.save(community));
     }
 
@@ -72,11 +67,11 @@ public class CommunityService {
         Community community = communityRepository.findById(id)
                 .orElseThrow(() -> new CommunityNotFoundException(id));
 
-        if (!community.getAuthor().getId().equals(user.getId())) {
+        if (!community.getUserId().equals(user.getId())) {
             throw new UnauthorizedException("수정 권한이 없습니다.");
         }
 
-        community.update(request.getTitle(), request.getContent(), request.getCategory());
+        community.update(request.getTitle(), request.getContent());
         return new CommunityResponse(community);
     }
 
@@ -86,7 +81,7 @@ public class CommunityService {
         Community community = communityRepository.findById(id)
                 .orElseThrow(() -> new CommunityNotFoundException(id));
 
-        if (!community.getAuthor().getId().equals(user.getId())) {
+        if (!community.getUserId().equals(user.getId())) {
             throw new UnauthorizedException("삭제 권한이 없습니다.");
         }
 
@@ -99,14 +94,11 @@ public class CommunityService {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new CommunityNotFoundException(communityId));
 
-        if (communityLikeRepository.findByUserAndCommunity(user, community).isPresent()) {
+        if (communityLikeRepository.findByUserIdAndCommunityId(user.getId(), communityId).isPresent()) {
             return new LikeResponse(true, community.getLikeCount());
         }
 
-        communityLikeRepository.save(CommunityLike.builder()
-                .user(user)
-                .community(community)
-                .build());
+        communityLikeRepository.save(CommunityLike.create(user.getId(), communityId));
         community.increaseLikeCount();
         return new LikeResponse(true, community.getLikeCount());
     }

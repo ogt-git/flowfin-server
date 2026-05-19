@@ -44,12 +44,7 @@ public class CommentService {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new CommunityNotFoundException(communityId));
 
-        Comment comment = Comment.builder()
-                .community(community)
-                .author(user)
-                .content(request.getContent())
-                .isAnonymous(request.isAnonymous())
-                .build();
+        Comment comment = Comment.create(community.getId(), user.getId(), request.getContent(), request.isAnonymous());
 
         return new CommentResponse(commentRepository.save(comment));
     }
@@ -60,14 +55,14 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CommentNotFoundException(commentId));
 
-        if (!comment.getCommunity().getId().equals(communityId)) {
+        if (!comment.getCommunityId().equals(communityId)) {
             throw new CommentNotFoundException(commentId);
         }
-        if (!comment.getAuthor().getId().equals(user.getId())) {
+        if (!comment.getUserId().equals(user.getId())) {
             throw new UnauthorizedException("댓글 삭제 권한이 없습니다.");
         }
 
-        comment.delete();
+        comment.softDelete();
     }
 
     private User getUserFromToken(String token) {

@@ -3,21 +3,17 @@ package com.project.flowfinserver.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.flowfinserver.codef.CodefApiClient;
 import com.project.flowfinserver.domain.AccountType;
-import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.domain.CodefConnectedAccount;
-import com.project.flowfinserver.domain.Expense;
-import com.project.flowfinserver.domain.StockAccountSnapshot;
 import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
+import com.project.flowfinserver.dto.codef.StockAssetDto;
+import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.exception.CodefAccountNotFoundException;
 import com.project.flowfinserver.exception.TooManyRequestsException;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
-import com.project.flowfinserver.repository.ExpenseRepository;
-import com.project.flowfinserver.repository.StockAccountSnapshotRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -25,9 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
@@ -39,12 +33,11 @@ class CodefSyncServiceTest {
 
     @Mock CodefApiClient codefApiClient;
     @Mock CodefConnectedAccountRepository connectedAccountRepository;
-    @Mock ExpenseRepository expenseRepository;
-    @Mock StockAccountSnapshotRepository stockSnapshotRepository;
-    @Mock CategoryClassificationService classificationService;
+    @Mock ExpenseSaveService expenseSaveService;
+    @Mock AssetService assetService;
+    @Spy  ObjectMapper objectMapper;
     @Mock StringRedisTemplate stringRedisTemplate;
     @Mock ValueOperations<String, String> valueOps;
-    @Spy  ObjectMapper objectMapper;
 
     @InjectMocks
     CodefSyncService codefSyncService;
@@ -76,15 +69,12 @@ class CodefSyncServiceTest {
             {
               "result": {"code": "CF-00000", "message": "성공"},
               "data": {
+                "resAccount": "12345678901",
                 "resDepositReceived": "500000",
                 "resItemList": [
                   {
                     "resValuationAmt": "1100000", "resPurchaseAmount": "1000000",
                     "resValuationPL": "100000", "resItemName": "삼성전자", "resItemCode": "005930"
-                  },
-                  {
-                    "resValuationAmt": "880000", "resPurchaseAmount": "800000",
-                    "resValuationPL": "80000", "resItemName": "SK하이닉스", "resItemCode": "000660"
                   }
                 ]
               }
@@ -96,108 +86,68 @@ class CodefSyncServiceTest {
 
     @BeforeEach
     void setUp() {
-        cardAccount = CodefConnectedAccount.create(TEST_USER_ID, "card-connected-id", "0301", AccountType.CARD);
+        cardAccount  = CodefConnectedAccount.create(TEST_USER_ID, "card-connected-id", "0301", AccountType.CARD);
         stockAccount = CodefConnectedAccount.create(TEST_USER_ID, "stock-connected-id", "0240", AccountType.STOCK);
         stockAccount.updateAccountNumber("12345678901");
     }
 
-    // ==================== manualSync 쿨다운 테스트 ====================
+    // ==================== manualSyncCard 쿨다운 테스트 ====================
 
     @Test
-    @DisplayName("manualSync — 쿨다운 중: TooManyRequestsException 발생")
-    void manualSync_throwsWhenCooldownActive() {
-        String key = "codef:refresh:cooldown:" + TEST_USER_ID;
+    @DisplayName("manualSyncCard — 쿨다운 중: TooManyRequestsException 발생")
+    void manualSyncCard_throwsWhenCooldownActive() {
+        String key = "codef:refresh:cooldown:" + TEST_USER_ID + ":CARD";
         given(stringRedisTemplate.hasKey(key)).willReturn(true);
 
-        assertThatThrownBy(() -> codefSyncService.manualSync(TEST_USER_ID))
+        assertThatThrownBy(() -> codefSyncService.manualSyncCard(TEST_USER_ID))
                 .isInstanceOf(TooManyRequestsException.class)
                 .hasMessageContaining("5분");
-
-        then(stringRedisTemplate).should(never()).opsForValue();
     }
 
     @Test
-    @DisplayName("manualSync — 쿨다운 없음: Redis 키 설정 후 동기화 실행")
-    void manualSync_setsCooldownKeyAndSyncs() {
-        String key = "codef:refresh:cooldown:" + TEST_USER_ID;
+    @DisplayName("manualSyncCard — 쿨다운 없음: Redis 키 설정 후 동기화 실행")
+    void manualSyncCard_setsCooldownKeyAndSyncs() {
+        String key = "codef:refresh:cooldown:" + TEST_USER_ID + ":CARD";
         given(stringRedisTemplate.hasKey(key)).willReturn(false);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
-
-        // 카드/증권 계정 없음 → CodefAccountNotFoundException 내부 처리 (조용히 넘어감)
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of());
-        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
-                .willReturn(List.of());
 
-        CodefSyncResultDto result = codefSyncService.manualSync(TEST_USER_ID);
+        CodefSyncResultDto result = codefSyncService.manualSyncCard(TEST_USER_ID);
 
         then(valueOps).should().set(eq(key), eq("1"), eq(5L), eq(TimeUnit.MINUTES));
+        assertThat(result.getAccountType()).isEqualTo("CARD");
         assertThat(result.getSavedCount()).isZero();
-        assertThat(result.getSkippedCount()).isZero();
     }
 
     @Test
-    @DisplayName("manualSync — 카드+증권 모두 있음: 통합 결과 반환")
-    void manualSync_combinesCardAndStockResults() throws Exception {
-        String key = "codef:refresh:cooldown:" + TEST_USER_ID;
-        given(stringRedisTemplate.hasKey(key)).willReturn(false);
-        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+    @DisplayName("manualSyncStock — 쿨다운 중: TooManyRequestsException 발생")
+    void manualSyncStock_throwsWhenCooldownActive() {
+        String key = "codef:refresh:cooldown:" + TEST_USER_ID + ":STOCK";
+        given(stringRedisTemplate.hasKey(key)).willReturn(true);
 
-        // card sync
-        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
-                .willReturn(List.of(cardAccount));
-        given(codefApiClient.requestProduct(contains("billing"), any())).willReturn(CARD_SUCCESS_RESPONSE);
-        given(classificationService.classifyByRule(anyString())).willReturn(Optional.empty());
-        given(classificationService.resolveClassifiedBy(isNull())).willReturn(null);
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                eq(TEST_USER_ID), any(), anyString(), anyLong())).willReturn(false);
-
-        // stock sync
-        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
-                .willReturn(List.of(stockAccount));
-        given(codefApiClient.requestProduct(contains("financial"), any())).willReturn(STOCK_SUCCESS_RESPONSE);
-        given(stockSnapshotRepository.existsByUserIdAndSnapshotDateAndBrokerName(any(), any(), any()))
-                .willReturn(false);
-
-        CodefSyncResultDto result = codefSyncService.manualSync(TEST_USER_ID);
-
-        // 카드 3건 저장 + 증권 1건 저장
-        assertThat(result.getSavedCount()).isEqualTo(4);
-        assertThat(result.getFailedAccounts()).isEmpty();
+        assertThatThrownBy(() -> codefSyncService.manualSyncStock(TEST_USER_ID))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessageContaining("5분");
     }
 
     // ==================== syncCard 테스트 ====================
 
     @Test
-    @DisplayName("syncCard — 정상 응답: 신규 2건 저장, 1건 중복 스킵")
-    void syncCard_savesNewAndSkipsDuplicate() throws Exception {
+    @DisplayName("syncCard — 정상 응답: ExpenseSaveService에 위임하여 결과 반환")
+    void syncCard_delegatesToExpenseSaveService() throws Exception {
+        given(stringRedisTemplate.hasKey(anyString())).willReturn(false);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of(cardAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_SUCCESS_RESPONSE);
-        given(classificationService.classifyByRule(anyString())).willReturn(Optional.empty());
-        given(classificationService.resolveClassifiedBy(isNull())).willReturn(null);
-
-        // 스타벅스만 중복
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                eq(TEST_USER_ID), eq(LocalDateTime.of(2024, 4, 1, 0, 0)), eq("스타벅스 강남점"), eq(6500L)))
-                .willReturn(true);
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                eq(TEST_USER_ID), eq(LocalDateTime.of(2024, 4, 2, 0, 0)), eq("쿠팡"), eq(35000L)))
-                .willReturn(false);
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                eq(TEST_USER_ID), eq(LocalDateTime.of(2024, 4, 3, 0, 0)), eq("넷플릭스"), eq(13500L)))
-                .willReturn(false);
+        given(expenseSaveService.saveExpenses(eq(TEST_USER_ID), any())).willReturn(3);
 
         CodefSyncResultDto result = codefSyncService.syncCard(TEST_USER_ID);
 
-        assertThat(result.getSavedCount()).isEqualTo(2);
-        assertThat(result.getSkippedCount()).isEqualTo(1);
+        assertThat(result.getSavedCount()).isEqualTo(3);
         assertThat(result.getFailedAccounts()).isEmpty();
-
-        ArgumentCaptor<Expense> captor = ArgumentCaptor.forClass(Expense.class);
-        then(expenseRepository).should(times(2)).save(captor.capture());
-        assertThat(captor.getAllValues()).extracting(Expense::getMerchantName)
-                .containsExactlyInAnyOrder("쿠팡", "넷플릭스");
+        then(expenseSaveService).should(times(1)).saveExpenses(eq(TEST_USER_ID), any());
     }
 
     @Test
@@ -213,6 +163,8 @@ class CodefSyncServiceTest {
     @Test
     @DisplayName("syncCard — CODEF 오류 코드: failedAccounts에 오류 코드 포함하여 기록")
     void syncCard_recordsFailedAccountOnCodefError() throws Exception {
+        given(stringRedisTemplate.hasKey(anyString())).willReturn(false);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of(cardAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_ERROR_RESPONSE);
@@ -222,56 +174,28 @@ class CodefSyncServiceTest {
         assertThat(result.getSavedCount()).isZero();
         assertThat(result.getFailedAccounts()).hasSize(1);
         assertThat(result.getFailedAccounts().get(0)).contains("0301").contains("CF-10002");
-        then(expenseRepository).should(never()).save(any());
-    }
-
-    @Test
-    @DisplayName("syncCard — Rule 분류 성공: categoryId와 RULE 태그 저장")
-    void syncCard_appliesRuleClassification() throws Exception {
-        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
-                .willReturn(List.of(cardAccount));
-        given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_SUCCESS_RESPONSE);
-        given(classificationService.classifyByRule(anyString())).willReturn(Optional.empty());
-        given(classificationService.resolveClassifiedBy(isNull())).willReturn(null);
-        given(classificationService.classifyByRule("넷플릭스")).willReturn(Optional.of(9L));
-        given(classificationService.resolveClassifiedBy(9L)).willReturn(ClassifiedBy.RULE);
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                any(), any(), any(), any())).willReturn(false);
-
-        codefSyncService.syncCard(TEST_USER_ID);
-
-        ArgumentCaptor<Expense> captor = ArgumentCaptor.forClass(Expense.class);
-        then(expenseRepository).should(times(3)).save(captor.capture());
-        Expense netflix = captor.getAllValues().stream()
-                .filter(e -> "넷플릭스".equals(e.getMerchantName()))
-                .findFirst().orElseThrow();
-        assertThat(netflix.getCategoryId()).isEqualTo(9L);
-        assertThat(netflix.getClassifiedBy()).isEqualTo(ClassifiedBy.RULE);
+        then(expenseSaveService).should(never()).saveExpenses(any(), any());
     }
 
     // ==================== syncStock 테스트 ====================
 
     @Test
-    @DisplayName("syncStock — 정상 응답: resItemList 합산 후 스냅샷 저장")
-    void syncStock_savesSnapshotWithAggregatedAmounts() throws Exception {
+    @DisplayName("syncStock — 정상 응답: AssetService에 위임하여 계좌·종목 upsert")
+    void syncStock_delegatesToAssetService() throws Exception {
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
                 .willReturn(List.of(stockAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(STOCK_SUCCESS_RESPONSE);
-        given(stockSnapshotRepository.existsByUserIdAndSnapshotDateAndBrokerName(any(), any(), any()))
-                .willReturn(false);
+
+        com.project.flowfinserver.domain.AssetAccount mockAccount =
+                com.project.flowfinserver.domain.AssetAccount.create(TEST_USER_ID, "0240", "12345678901", 1_100_000L, 500_000L);
+        given(assetService.saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class))).willReturn(mockAccount);
 
         CodefSyncResultDto result = codefSyncService.syncStock(TEST_USER_ID);
 
         assertThat(result.getSavedCount()).isEqualTo(1);
-        assertThat(result.getSkippedCount()).isZero();
-
-        ArgumentCaptor<StockAccountSnapshot> captor = ArgumentCaptor.forClass(StockAccountSnapshot.class);
-        then(stockSnapshotRepository).should().save(captor.capture());
-        StockAccountSnapshot saved = captor.getValue();
-        assertThat(saved.getTotalEvalAmount()).isEqualTo(1_980_000L);
-        assertThat(saved.getTotalPurchaseAmount()).isEqualTo(1_800_000L);
-        assertThat(saved.getProfitLoss()).isEqualTo(180_000L);
-        assertThat(saved.getDepositReceived()).isEqualTo(500_000L);
+        assertThat(result.getFailedAccounts()).isEmpty();
+        then(assetService).should(times(1)).saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class));
+        then(assetService).should(times(1)).saveOrUpdateItems(eq(mockAccount), anyList());
     }
 
     @Test

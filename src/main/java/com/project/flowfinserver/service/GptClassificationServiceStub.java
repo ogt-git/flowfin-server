@@ -21,7 +21,7 @@ public class GptClassificationServiceStub implements GptClassificationService {
     @Override
     public ClassificationResult classify(String merchantName, Long amount) {
         log.debug("[GPT-stub] Rule 분류 실패 → 기타지출 fallback merchantName={} amount={}", merchantName, amount);
-        Category fallback = categoryRepository.findById(11L).orElseThrow(); // CHANGED
+        Category fallback = categoryRepository.findByName("기타지출").orElseThrow(); // CHANGED
         return ClassificationResult.ofFallback(fallback); // CHANGED
     }
 }

@@ -3,8 +3,10 @@ package com.project.flowfinserver.expense;
 // 테스트 대상: ExpenseClassificationService.classify(String merchantName, Long amount)
 // — Rule 분류 성공 시 RULE 반환, 실패 시 GptClassificationService 위임
 
+import com.project.flowfinserver.domain.Category;
 import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.dto.ClassificationResult;
+import com.project.flowfinserver.repository.CategoryRepository;
 import com.project.flowfinserver.service.ExpenseClassificationService;
 import com.project.flowfinserver.service.ExpenseKeywordClassifier;
 import com.project.flowfinserver.service.GptClassificationService;
@@ -15,13 +17,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.BDDMockito.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +33,9 @@ class ExpenseClassificationServiceTest {
 
     @Mock
     GptClassificationService gptClassificationService;
+
+    @Mock
+    CategoryRepository categoryRepository;
 
     @InjectMocks
     ExpenseClassificationService classificationService;
@@ -44,13 +48,12 @@ class ExpenseClassificationServiceTest {
     @Test
     @DisplayName("키워드 매핑 성공 시 classifiedBy가 RULE이다")
     void 키워드_매핑_성공_시_classifiedBy가_RULE이다() {
-        // given
+        Category cat5 = mock(Category.class);
         given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
-        // when
         ClassificationResult result = classificationService.classify(MERCHANT, AMOUNT);
 
-        // then
         assertThat(result.getClassifiedBy())
                 .as("Rule 매핑 성공 시 classifiedBy는 RULE이어야 한다")
                 .isEqualTo(ClassifiedBy.RULE);
@@ -59,43 +62,40 @@ class ExpenseClassificationServiceTest {
     @Test
     @DisplayName("키워드 매핑 성공 시 confidence가 100이다")
     void 키워드_매핑_성공_시_confidence가_100이다() {
-        // given
+        Category cat5 = mock(Category.class);
         given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
-        // when
         ClassificationResult result = classificationService.classify(MERCHANT, AMOUNT);
 
-        // then
         assertThat(result.getConfidence())
                 .as("Rule 분류 결과의 confidence는 항상 100이어야 한다")
                 .isEqualTo(100);
     }
 
     @Test
-    @DisplayName("키워드 매핑 성공 시 categoryId가 분류기 반환값과 일치한다")
-    void 키워드_매핑_성공_시_categoryId가_분류기_반환값과_일치한다() {
-        // given
+    @DisplayName("키워드 매핑 성공 시 반환된 Category 객체가 DB 조회 결과와 동일하다")
+    void 키워드_매핑_성공_시_Category가_DB조회_결과와_일치한다() {
+        Category cat5 = mock(Category.class);
         given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
-        // when
         ClassificationResult result = classificationService.classify(MERCHANT, AMOUNT);
 
-        // then
-        assertThat(result.getCategoryId())
-                .as("Rule 매핑된 categoryId가 그대로 반환되어야 한다")
-                .isEqualTo(5L);
+        assertThat(result.getCategory())
+                .as("Rule 매핑된 Category는 categoryRepository.findById(5L) 결과와 같아야 한다")
+                .isSameAs(cat5);
     }
 
     @Test
     @DisplayName("키워드 매핑 성공 시 GptClassificationService는 호출되지 않는다")
     void 키워드_매핑_성공_시_GPT는_호출되지_않는다() {
-        // given
+        Category cat5 = mock(Category.class);
         given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
-        // when
         classificationService.classify(MERCHANT, AMOUNT);
 
-        // then
         then(gptClassificationService).should(never()).classify(anyString(), anyLong());
     }
 
@@ -104,36 +104,32 @@ class ExpenseClassificationServiceTest {
     @Test
     @DisplayName("키워드 매핑 실패(null) 시 GptClassificationService.classify()가 1회 호출된다")
     void 키워드_매핑_실패_시_GPT가_1회_호출된다() {
-        // given
+        Category fallback = mock(Category.class);
         given(keywordClassifier.classify(MERCHANT)).willReturn(null);
         given(gptClassificationService.classify(eq(MERCHANT), eq(AMOUNT)))
-                .willReturn(ClassificationResult.ofFallback());
+                .willReturn(ClassificationResult.ofFallback(fallback));
 
-        // when
         classificationService.classify(MERCHANT, AMOUNT);
 
-        // then
         then(gptClassificationService).should().classify(MERCHANT, AMOUNT);
     }
 
     @Test
     @DisplayName("키워드 매핑 실패 시 GptClassificationService의 반환값이 그대로 전달된다")
     void 키워드_매핑_실패_시_GPT_반환값이_그대로_전달된다() {
-        // given
-        ClassificationResult gptResult = ClassificationResult.ofAi(9L, 75);
+        Category cat9 = mock(Category.class);
+        ClassificationResult gptResult = ClassificationResult.ofAi(cat9, 75);
         given(keywordClassifier.classify(MERCHANT)).willReturn(null);
         given(gptClassificationService.classify(eq(MERCHANT), eq(AMOUNT))).willReturn(gptResult);
 
-        // when
         ClassificationResult result = classificationService.classify(MERCHANT, AMOUNT);
 
-        // then
         assertThat(result)
                 .as("GPT 반환값이 그대로 전달되어야 한다")
                 .isSameAs(gptResult);
-        assertThat(result.getCategoryId())
-                .as("GPT가 반환한 categoryId가 유지되어야 한다")
-                .isEqualTo(9L);
+        assertThat(result.getCategory())
+                .as("GPT가 반환한 Category가 유지되어야 한다")
+                .isSameAs(cat9);
         assertThat(result.getClassifiedBy())
                 .as("GPT가 반환한 classifiedBy(AI)가 유지되어야 한다")
                 .isEqualTo(ClassifiedBy.AI);
@@ -145,14 +141,15 @@ class ExpenseClassificationServiceTest {
     // ==================== ClassificationResult 팩토리 메서드 검증 ====================
 
     @Test
-    @DisplayName("ClassificationResult.ofRule() — categoryId·classifiedBy·confidence가 올바르다")
+    @DisplayName("ClassificationResult.ofRule() — Category·classifiedBy·confidence가 올바르다")
     void ofRule_결과의_필드가_올바르다() {
-        // when
-        ClassificationResult result = ClassificationResult.ofRule(5L);
+        Category cat5 = mock(Category.class);
+        given(cat5.getId()).willReturn(5L);
 
-        // then
-        assertThat(result.getCategoryId())
-                .as("ofRule()의 categoryId는 입력값과 동일해야 한다")
+        ClassificationResult result = ClassificationResult.ofRule(cat5);
+
+        assertThat(result.getCategory().getId())
+                .as("ofRule()의 categoryId는 입력 Category의 id와 동일해야 한다")
                 .isEqualTo(5L);
         assertThat(result.getClassifiedBy())
                 .as("ofRule()의 classifiedBy는 RULE이어야 한다")
@@ -163,15 +160,15 @@ class ExpenseClassificationServiceTest {
     }
 
     @Test
-    @DisplayName("ClassificationResult.ofFallback() — categoryId=11, classifiedBy=AI, confidence=0")
+    @DisplayName("ClassificationResult.ofFallback() — classifiedBy=AI, confidence=0")
     void ofFallback_결과의_필드가_올바르다() {
-        // when
-        ClassificationResult result = ClassificationResult.ofFallback();
+        Category fallbackCat = mock(Category.class);
 
-        // then
-        assertThat(result.getCategoryId())
-                .as("ofFallback()의 categoryId는 기타지출(11)이어야 한다")
-                .isEqualTo(11L);
+        ClassificationResult result = ClassificationResult.ofFallback(fallbackCat);
+
+        assertThat(result.getCategory())
+                .as("ofFallback()의 category는 전달된 fallbackCategory이어야 한다")
+                .isSameAs(fallbackCat);
         assertThat(result.getClassifiedBy())
                 .as("ofFallback()의 classifiedBy는 AI이어야 한다")
                 .isEqualTo(ClassifiedBy.AI);
@@ -181,14 +178,15 @@ class ExpenseClassificationServiceTest {
     }
 
     @Test
-    @DisplayName("ClassificationResult.ofAi() — categoryId·confidence가 입력값과 일치한다")
+    @DisplayName("ClassificationResult.ofAi() — category·confidence가 입력값과 일치한다")
     void ofAi_결과의_필드가_올바르다() {
-        // when
-        ClassificationResult result = ClassificationResult.ofAi(7L, 82);
+        Category cat7 = mock(Category.class);
+        given(cat7.getId()).willReturn(7L);
 
-        // then
-        assertThat(result.getCategoryId())
-                .as("ofAi()의 categoryId는 입력값과 동일해야 한다")
+        ClassificationResult result = ClassificationResult.ofAi(cat7, 82);
+
+        assertThat(result.getCategory().getId())
+                .as("ofAi()의 categoryId는 입력 Category의 id와 동일해야 한다")
                 .isEqualTo(7L);
         assertThat(result.getClassifiedBy())
                 .as("ofAi()의 classifiedBy는 AI이어야 한다")

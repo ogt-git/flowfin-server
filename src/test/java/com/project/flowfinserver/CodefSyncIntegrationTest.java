@@ -13,17 +13,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * CODEF API와 Redis만 Mock, 나머지는 실제 Spring 빈 + Docker MySQL로 동작하는 통합 테스트.
@@ -41,7 +41,8 @@ class CodefSyncIntegrationTest {
     @Autowired CodefConnectedAccountRepository connectedAccountRepository;
     @Autowired ExpenseRepository expenseRepository;
     @Autowired CategoryRepository categoryRepository;
-    @Autowired StockAccountSnapshotRepository stockSnapshotRepository;
+    @Autowired AssetAccountRepository assetAccountRepository;
+    @Autowired AssetItemRepository assetItemRepository;
     @Autowired UserRepository userRepository;
 
     private Long testUserId;
@@ -82,6 +83,7 @@ class CodefSyncIntegrationTest {
             """;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         String emailHash = Integer.toHexString("integration-test@flowfin.test".hashCode());
         User testUser = userRepository.save(
@@ -91,6 +93,10 @@ class CodefSyncIntegrationTest {
         if (categoryRepository.findByName("기타지출").isEmpty()) {
             categoryRepository.save(Category.create("기타지출", CategoryType.ETC));
         }
+
+        ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+        given(stringRedisTemplate.hasKey(anyString())).willReturn(false);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
     }
 
     // ==================== syncCard 통합 테스트 ====================
@@ -122,9 +128,11 @@ class CodefSyncIntegrationTest {
 
         System.out.println("\n========== 저장된 지출 내역 ==========");
         savedExpenses.forEach(e -> System.out.printf(
-                "[%s] %-20s %,7d원  (카드사: %s, 카테고리ID: %s, 분류: %s)%n",
+                "[%s] %-20s %,7d원  (카드사: %s, 카테고리: %s, 분류: %s)%n",
                 e.getExpenseDate(), e.getMerchantName(), e.getAmount(),
-                e.getCardCompany(), e.getCategoryId(), e.getClassifiedBy()
+                e.getCardCompany(),
+                e.getCategory() != null ? e.getCategory().getId() : "미분류",
+                e.getClassifiedBy()
         ));
 
         assertThat(savedExpenses).hasSize(4);
@@ -172,8 +180,8 @@ class CodefSyncIntegrationTest {
     // ==================== syncStock 통합 테스트 ====================
 
     @Test
-    @DisplayName("증권 동기화 전체 흐름: resItemList 합산 → DB 저장 → 조회")
-    void syncStock_fullFlow_savesSnapshotAndRetrievesIt() throws Exception {
+    @DisplayName("증권 동기화 전체 흐름: resItemList → AssetAccount·AssetItem upsert 확인")
+    void syncStock_fullFlow_savesAssetAccountAndItems() throws Exception {
         CodefConnectedAccount stockConn = CodefConnectedAccount.create(
                 testUserId, "stock-connected-id-001", "0240", AccountType.STOCK);
         stockConn.updateAccountNumber("12345678901");
@@ -185,36 +193,32 @@ class CodefSyncIntegrationTest {
 
         System.out.println("\n========== 증권 동기화 결과 ==========");
         System.out.println("저장 성공: " + result.getSavedCount() + "건");
-        System.out.println("중복 스킵: " + result.getSkippedCount() + "건");
 
         assertThat(result.getSavedCount()).isEqualTo(1);
-        assertThat(result.getSkippedCount()).isZero();
         assertThat(result.getFailedAccounts()).isEmpty();
 
-        Optional<StockAccountSnapshot> snapshotOpt = stockSnapshotRepository
-                .findTopByUserIdOrderBySnapshotDateDesc(testUserId);
+        List<AssetAccount> accounts = assetAccountRepository.findAllByUserId(testUserId);
+        assertThat(accounts).hasSize(1);
+        AssetAccount account = accounts.get(0);
 
-        assertThat(snapshotOpt).isPresent();
-        StockAccountSnapshot snapshot = snapshotOpt.get();
+        System.out.println("\n========== 저장된 증권 계좌 ==========");
+        System.out.printf("브로커: %s%n", account.getBrokerCode());
+        System.out.printf("총자산: %,d원%n", account.getTotalAsset());
+        System.out.printf("예수금: %,d원%n", account.getDepositReceived());
 
-        System.out.println("\n========== 저장된 증권 스냅샷 ==========");
-        System.out.printf("브로커: %s%n", snapshot.getBrokerName());
-        System.out.printf("평가금액: %,d원%n", snapshot.getTotalEvalAmount());
-        System.out.printf("매입금액: %,d원%n", snapshot.getTotalPurchaseAmount());
-        System.out.printf("평가손익: %,d원%n", snapshot.getProfitLoss());
-        System.out.printf("예수금:   %,d원%n", snapshot.getDepositReceived());
+        assertThat(account.getBrokerCode()).isEqualTo("0240");
+        assertThat(account.getTotalAsset()).isEqualTo(1_980_000L); // 1100000 + 880000
+        assertThat(account.getDepositReceived()).isEqualTo(500_000L);
 
-        assertThat(snapshot.getTotalEvalAmount()).isEqualTo(1_980_000L);
-        assertThat(snapshot.getTotalPurchaseAmount()).isEqualTo(1_800_000L);
-        assertThat(snapshot.getProfitLoss()).isEqualTo(180_000L);
-        assertThat(snapshot.getDepositReceived()).isEqualTo(500_000L);
-        assertThat(snapshot.getBrokerName()).isEqualTo("0240");
-        assertThat(snapshot.getSnapshotDate()).isEqualTo(LocalDate.now());
+        List<AssetItem> items = assetItemRepository.findAllByAccountId(account.getId());
+        assertThat(items).hasSize(2);
+        assertThat(items).extracting(AssetItem::getItemCode)
+                .containsExactlyInAnyOrder("005930", "000660");
     }
 
     @Test
-    @DisplayName("증권 중복 동기화: 오늘 날짜 동일 계좌 두 번 호출 → 두 번째 스킵")
-    void syncStock_secondCall_skipsForSameDate() throws Exception {
+    @DisplayName("증권 중복 동기화: 두 번째 호출 시 기존 데이터 upsert(업데이트)")
+    void syncStock_secondCall_upsertsSameAccount() throws Exception {
         CodefConnectedAccount stockConn = CodefConnectedAccount.create(
                 testUserId, "stock-connected-id-002", "0240", AccountType.STOCK);
         stockConn.updateAccountNumber("12345678901");
@@ -226,12 +230,15 @@ class CodefSyncIntegrationTest {
         CodefSyncResultDto second = codefSyncService.syncStock(testUserId);
 
         System.out.println("\n========== 증권 중복 동기화 결과 ==========");
-        System.out.println("1차: saved=" + first.getSavedCount() + ", skipped=" + first.getSkippedCount());
-        System.out.println("2차: saved=" + second.getSavedCount() + ", skipped=" + second.getSkippedCount());
+        System.out.println("1차: saved=" + first.getSavedCount());
+        System.out.println("2차: saved=" + second.getSavedCount());
 
+        // upsert 방식이므로 두 번 모두 성공(saved=1)
         assertThat(first.getSavedCount()).isEqualTo(1);
-        assertThat(second.getSavedCount()).isZero();
-        assertThat(second.getSkippedCount()).isEqualTo(1);
+        assertThat(second.getSavedCount()).isEqualTo(1);
+
+        // 계좌는 여전히 1개 (중복 생성 없음)
+        assertThat(assetAccountRepository.findAllByUserId(testUserId)).hasSize(1);
     }
 
     @Test
@@ -250,6 +257,6 @@ class CodefSyncIntegrationTest {
         System.out.println("\n========== AES 암호화 검증 ==========");
         System.out.println("원본 connectedId: " + plainConnectedId);
         System.out.println("복호화 후 connectedId: " + reloaded.getConnectedId());
-        System.out.println("✓ JPA 컨버터가 투명하게 암/복호화 처리 확인");
+        System.out.println("JPA 컨버터가 투명하게 암/복호화 처리 확인");
     }
 }

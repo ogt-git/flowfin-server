@@ -24,7 +24,7 @@ public record ExpenseListItemDto(
                 expense.getExpenseDate() != null ? expense.getExpenseDate().toString() : null,
                 category != null ? category.getId() : null,
                 category != null ? category.getName() : null,
-                category != null ? category.getType().name() : null,
+                category != null && category.getType() != null ? category.getType().name() : null,
                 expense.getClassifiedBy() != null ? expense.getClassifiedBy().name() : null,
                 expense.isUserModified()
         );

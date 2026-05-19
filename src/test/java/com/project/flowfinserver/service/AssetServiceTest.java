@@ -2,11 +2,16 @@ package com.project.flowfinserver.service;
 
 import com.project.flowfinserver.domain.AssetAccount;
 import com.project.flowfinserver.domain.AssetItem;
+import com.project.flowfinserver.domain.CategoryType;
 import com.project.flowfinserver.dto.asset.StockAccountResponse;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.repository.AssetAccountRepository;
 import com.project.flowfinserver.repository.AssetItemRepository;
+import com.project.flowfinserver.repository.CategoryRepository;
+import com.project.flowfinserver.repository.ExpenseRepository;
+import com.project.flowfinserver.repository.ManualAssetRepository;
+import com.project.flowfinserver.repository.PortfolioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +20,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -27,10 +34,15 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AssetServiceTest {
 
     @Mock AssetAccountRepository assetAccountRepository;
     @Mock AssetItemRepository assetItemRepository;
+    @Mock ManualAssetRepository manualAssetRepository;
+    @Mock CategoryRepository categoryRepository;
+    @Mock ExpenseRepository expenseRepository;
+    @Mock PortfolioRepository portfolioRepository;
 
     @InjectMocks
     AssetService assetService;
@@ -44,6 +56,12 @@ class AssetServiceTest {
     @BeforeEach
     void setUp() {
         dto = new StockAssetDto(BROKER_CODE, ACCOUNT_NO, 2_000_000L, 500_000L);
+
+        // syncAssetData 내부의 updateInvestableAmount 의존성 — LENIENT 모드로 무관한 테스트에 영향 방지
+        given(categoryRepository.findByType(any(CategoryType.class))).willReturn(List.of());
+        given(manualAssetRepository.findByUserIdAndAssetTypeIn(anyLong(), any())).willReturn(List.of());
+        given(assetAccountRepository.findAllByUserId(anyLong())).willReturn(List.of());
+        given(portfolioRepository.findTopByUserIdOrderByCreatedAtDesc(anyLong())).willReturn(Optional.empty());
     }
 
     // ==================== saveOrUpdateAccount ====================
@@ -51,7 +69,7 @@ class AssetServiceTest {
     @Test
     @DisplayName("saveOrUpdateAccount — 계좌 없음: 신규 save 호출")
     void saveOrUpdateAccount_noExisting_savesNewAccount() {
-        given(assetAccountRepository.findByUserIdAndBrokerCodeAndAccountNo(USER_ID, BROKER_CODE, ACCOUNT_NO))
+        given(assetAccountRepository.findByUserIdAndBrokerCode(USER_ID, BROKER_CODE))
                 .willReturn(Optional.empty());
 
         AssetAccount newAccount = AssetAccount.create(USER_ID, BROKER_CODE, ACCOUNT_NO, 2_000_000L, 500_000L);
@@ -67,7 +85,7 @@ class AssetServiceTest {
     @DisplayName("saveOrUpdateAccount — 기존 계좌 있음: 업데이트 후 save 미호출")
     void saveOrUpdateAccount_existing_updatesWithoutSave() {
         AssetAccount existing = AssetAccount.create(USER_ID, BROKER_CODE, ACCOUNT_NO, 1_000_000L, 200_000L);
-        given(assetAccountRepository.findByUserIdAndBrokerCodeAndAccountNo(USER_ID, BROKER_CODE, ACCOUNT_NO))
+        given(assetAccountRepository.findByUserIdAndBrokerCode(USER_ID, BROKER_CODE))
                 .willReturn(Optional.of(existing));
 
         AssetAccount result = assetService.saveOrUpdateAccount(USER_ID, dto);

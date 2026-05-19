@@ -66,7 +66,12 @@
       "Bash(curl -s -X POST http://localhost:8080/api/auth/signup -H 'Content-Type: application/json; charset=UTF-8' --data-binary '{\"email\":\"test@flowfin.com\",\"password\":\"Test1234!\",\"name\":\"홍길동\"}')",
       "Bash(curl -s -X POST http://localhost:8080/api/auth/signup -H 'Content-Type: application/json' --data-binary @-)",
       "PowerShell(netstat *)",
-      "PowerShell(taskkill *)"
+      "PowerShell(taskkill *)",
+      "Bash(rm \"C:\\\\Users\\\\rudxo\\\\intelliJ\\\\flowfin-server\\\\src\\\\main\\\\java\\\\com\\\\project\\\\flowfinserver\\\\dto\\\\expense\\\\ExpenseStatsResponse.java\")",
+      "Bash(rm \"C:\\\\Users\\\\rudxo\\\\intelliJ\\\\flowfin-server\\\\src\\\\main\\\\java\\\\com\\\\project\\\\flowfinserver\\\\dto\\\\expense\\\\ExpenseItemResponse.java\")",
+      "Bash(xargs cat *)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(findstr :8080)"
     ]
   }
 }

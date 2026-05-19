@@ -27,7 +27,7 @@ public class ExpenseClassificationService {
         Long categoryId = keywordClassifier.classify(merchantName);
         if (categoryId != null) {
             Category category = categoryRepository.findById(categoryId) // CHANGED
-                    .orElseGet(() -> categoryRepository.findById(11L).orElseThrow()); // CHANGED
+                    .orElseGet(() -> categoryRepository.findByName("기타지출").orElseThrow()); // CHANGED
             log.debug("[Classification] Rule 분류 성공 merchantName={} categoryId={}", merchantName, categoryId);
             return ClassificationResult.ofRule(category); // CHANGED
         }

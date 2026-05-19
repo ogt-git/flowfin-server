@@ -37,7 +37,7 @@ public class ExpenseResponse {
                 .isUserModified(expense.isUserModified())
                 .categoryId(category != null ? category.getId() : null)
                 .categoryName(category != null ? category.getName() : null)
-                .categoryType(category != null ? category.getType().name() : null)
+                .categoryType(category != null && category.getType() != null ? category.getType().name() : null)
                 .build();
     }
 }

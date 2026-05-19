@@ -455,32 +455,24 @@ public class CodefSyncService {
     // 분류(Rule→GPT→Fallback) + 중복 스킵은 ExpenseSaveService 내부에서 처리
     private int[] saveExpensesFromTxArray(Long userId, String organizationCode, JsonNode txArray) {
         List<CardBillingDto> items = new ArrayList<>();
-        int cancelledCount = 0, foreignCount = 0;
-
         for (JsonNode tx : txArray) {
             String dateStr   = firstNonEmpty(tx, "resUsedDate");
             String merchant  = firstNonEmpty(tx, "resMemberStoreName");
             String amountStr = firstNonEmpty(tx, "resUsedAmount", "resPaymentAmt", "resPaymentPrincipal")
-                    .replaceAll("[^0-9]", "");
+                    .replaceAll("[^0-9\\-]", "");
 
             if (dateStr.isEmpty() || merchant.isEmpty() || amountStr.isEmpty()) continue;
 
             long amount = Long.parseLong(amountStr);
-            if (amount <= 0) continue;
+            if (amount == 0) continue;
 
             String paymentType = firstNonEmpty(tx, "resPaymentType");
-            boolean cancelled  = "Y".equalsIgnoreCase(firstNonEmpty(tx, "resCancelYn"));
-            boolean overseas   = "Y".equalsIgnoreCase(firstNonEmpty(tx, "resOverseasYn"));
-            if (cancelled) cancelledCount++;
-            if (overseas)  foreignCount++;
 
             LocalDateTime expenseDate = LocalDate.parse(dateStr, PARSE_FMT).atStartOfDay();
-            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate,
-                    paymentType, cancelled, overseas));
+            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate, paymentType));
         }
 
-        log.info("[CODEF] 청구 내역 파싱 org={} total={} cancelled={} overseas={}",
-                organizationCode, items.size(), cancelledCount, foreignCount);
+        log.info("[CODEF] 청구 내역 파싱 org={} total={}", organizationCode, items.size());
 
         int saved = expenseSaveService.saveExpenses(userId, items);
         return new int[]{saved, items.size() - saved};

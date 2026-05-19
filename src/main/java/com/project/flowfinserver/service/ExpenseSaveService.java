@@ -40,6 +40,14 @@ public class ExpenseSaveService {
         int excludedCount = 0;
 
         for (CardBillingDto item : items) {
+            boolean duplicate = expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
+                    userId, item.expenseDate(), item.merchantName(), item.amount());
+            if (duplicate) {
+                log.debug("[ExpenseSave] 중복 스킵 userId={} merchant={} date={} amount={}",
+                        userId, item.merchantName(), item.expenseDate(), item.amount());
+                continue;
+            }
+
             ClassificationResult result = classificationService.classify(item.merchantName(), item.amount());
 
             Expense expense = Expense.create(
@@ -52,19 +60,11 @@ public class ExpenseSaveService {
                     result.getClassifiedBy(),
                     result.getConfidence()
             );
-            // 단기카드대출(4) / 장기카드대출(5) / 취소 거래 / 해외 결제 → is_excluded=true 소프트 처리
-            if ("4".equals(item.paymentType()) || "5".equals(item.paymentType())
-                    || item.cancelled() || item.overseas()) {
+            // 단기카드대출(4) / 장기카드대출(5) → is_excluded=true 소프트 처리
+            // 취소 거래는 resUsedAmount 음수로 저장되어 통계에서 자동 상쇄됨
+            if ("4".equals(item.paymentType()) || "5".equals(item.paymentType())) {
                 expense.exclude();
                 excludedCount++;
-            }
-
-            boolean duplicate = expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                    userId, item.expenseDate(), item.merchantName(), item.amount());
-            if (duplicate) {
-                log.debug("[ExpenseSave] 중복 스킵 userId={} merchant={} date={} amount={}",
-                        userId, item.merchantName(), item.expenseDate(), item.amount());
-                continue;
             }
 
             expenseRepository.save(expense);

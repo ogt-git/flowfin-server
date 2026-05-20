@@ -25,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -38,6 +39,13 @@ public class CodefSyncService {
     private static final String CODEF_SUCCESS = "CF-00000";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMM");
     private static final DateTimeFormatter PARSE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    // 2026-05-20 기준 고정 환율: 1 USD = 1,500 KRW
+    private static final long USD_TO_KRW_RATE = 1_500L;
+    // 평가금액·매입금액·평가손익이 항상 원화로 내려오는 기관
+    private static final Set<String> GROUP_A_ORGS = Set.of("0218", "0247", "1247");
+    // resAccountCurrency 신뢰 불가 — 전 필드 원화로 간주하는 기관
+    private static final Set<String> GROUP_B_ORGS = Set.of("0267", "1267", "0287");
 
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
@@ -212,7 +220,22 @@ public class CodefSyncService {
         List<StockItemDto> items = new ArrayList<>();
         if (itemList.isArray()) {
             for (JsonNode item : itemList) {
-                long valuationAmt = parseLongField(item, "resValuationAmt");
+                String currencyCode = firstNonEmpty(item, "resAccountCurrency");
+
+                long valuationAmt;
+                long purchaseAmt;
+                long valuationPL;
+
+                if (GROUP_A_ORGS.contains(organizationCode) || GROUP_B_ORGS.contains(organizationCode)) {
+                    valuationAmt = parseLongField(item, "resValuationAmt");
+                    purchaseAmt  = parseLongField(item, "resPurchaseAmount");
+                    valuationPL  = parseLongField(item, "resValuationPL");
+                } else {
+                    // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
+                    valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                    purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                    valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                }
                 totalAsset += valuationAmt;
 
                 String itemCode = firstNonEmpty(item, "resItemCode");
@@ -230,9 +253,9 @@ public class CodefSyncService {
                         firstNonEmpty(item, "resItemName"),
                         itemCode,
                         (int) parseLongField(item, "resQuantity"),
-                        parseLongField(item, "resPurchaseAmount"),
+                        purchaseAmt,
                         valuationAmt,
-                        parseLongField(item, "resValuationPL"),
+                        valuationPL,
                         earningsRate
                 ));
             }
@@ -416,11 +439,27 @@ public class CodefSyncService {
         JsonNode data = root.path("data");
         JsonNode itemList = data.path("resItemList");
 
+        String organization = account.getOrganizationCode();
         long totalAsset = 0L;
         List<StockItemDto> items = new ArrayList<>();
         if (itemList.isArray()) {
             for (JsonNode item : itemList) {
-                long valuationAmt = parseLongField(item, "resValuationAmt");
+                String currencyCode = firstNonEmpty(item, "resAccountCurrency");
+
+                long valuationAmt;
+                long purchaseAmt;
+                long valuationPL;
+
+                if (GROUP_A_ORGS.contains(organization) || GROUP_B_ORGS.contains(organization)) {
+                    valuationAmt = parseLongField(item, "resValuationAmt");
+                    purchaseAmt  = parseLongField(item, "resPurchaseAmount");
+                    valuationPL  = parseLongField(item, "resValuationPL");
+                } else {
+                    // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
+                    valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                    purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                    valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                }
                 totalAsset += valuationAmt;
 
                 String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
@@ -431,9 +470,9 @@ public class CodefSyncService {
                         firstNonEmpty(item, "resItemName"),
                         firstNonEmpty(item, "resItemCode"),
                         (int) parseLongField(item, "resQuantity"),
-                        parseLongField(item, "resPurchaseAmount"),
+                        purchaseAmt,
                         valuationAmt,
-                        parseLongField(item, "resValuationPL"),
+                        valuationPL,
                         earningsRate
                 ));
             }
@@ -441,7 +480,7 @@ public class CodefSyncService {
 
         long depositReceived = parseLongField(data, "resDepositReceived");
         StockAssetDto assetDto = new StockAssetDto(
-                account.getOrganizationCode(), account.getAccountNumber(), totalAsset, depositReceived);
+                organization, account.getAccountNumber(), totalAsset, depositReceived);
         AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
         if (!items.isEmpty()) {
             assetService.saveOrUpdateItems(assetAccount, items);
@@ -487,7 +526,19 @@ public class CodefSyncService {
     }
 
     private long parseLongField(JsonNode node, String... fields) {
-        String raw = firstNonEmpty(node, fields).replaceAll("[^0-9\\-]", "");
-        return raw.isEmpty() ? 0L : Long.parseLong(raw);
+        String raw = firstNonEmpty(node, fields).replaceAll("[^0-9.\\-]", "");
+        if (raw.isEmpty()) return 0L;
+        try {
+            return Math.round(Double.parseDouble(raw));
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
+    private long toKrw(long amount, String currencyCode) {
+        if ("USD".equalsIgnoreCase(currencyCode)) {
+            return amount * USD_TO_KRW_RATE;
+        }
+        return amount;
     }
 }

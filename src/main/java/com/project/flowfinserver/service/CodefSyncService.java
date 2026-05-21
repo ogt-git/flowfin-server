@@ -6,10 +6,12 @@ import com.project.flowfinserver.codef.CodefApiClient;
 import com.project.flowfinserver.codef.CodefErrorClassifier;
 import com.project.flowfinserver.domain.*;
 import com.project.flowfinserver.dto.codef.CardBillingDto;
+import com.project.flowfinserver.dto.ExpenseSaveResult;
 import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.exception.*;
+import com.project.flowfinserver.openai.AiExpenseClassifier;
 import com.project.flowfinserver.util.MaskingUtil;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -50,6 +55,7 @@ public class CodefSyncService {
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
     private final ExpenseSaveService expenseSaveService;
+    private final AiExpenseClassifier aiExpenseClassifier;
     private final AssetService assetService;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate stringRedisTemplate;
@@ -491,7 +497,7 @@ public class CodefSyncService {
     }
 
     // txArray → CardBillingDto 리스트 변환 후 ExpenseSaveService 위임
-    // 분류(Rule→GPT→Fallback) + 중복 스킵은 ExpenseSaveService 내부에서 처리
+    // Rule 분류 + 중복 스킵은 ExpenseSaveService, Rule 실패 건은 트랜잭션 커밋 후 AiExpenseClassifier로 비동기 투입
     private int[] saveExpensesFromTxArray(Long userId, String organizationCode, JsonNode txArray) {
         List<CardBillingDto> items = new ArrayList<>();
         for (JsonNode tx : txArray) {
@@ -513,8 +519,24 @@ public class CodefSyncService {
 
         log.info("[CODEF] 청구 내역 파싱 org={} total={}", organizationCode, items.size());
 
-        int saved = expenseSaveService.saveExpenses(userId, items);
-        return new int[]{saved, items.size() - saved};
+        ExpenseSaveResult result = expenseSaveService.saveExpenses(userId, items);
+
+        // AI 분류 대기 Expense → 트랜잭션 커밋 후 비동기 큐 투입
+        if (!result.pendingAiIds().isEmpty()) {
+            List<Long> ids = result.pendingAiIds();
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        ids.forEach(id -> aiExpenseClassifier.classifyAndUpdate(id));
+                    }
+                });
+            } else {
+                ids.forEach(id -> aiExpenseClassifier.classifyAndUpdate(id));
+            }
+        }
+
+        return new int[]{result.savedCount(), items.size() - result.savedCount()};
     }
 
     private String firstNonEmpty(JsonNode node, String... fields) {

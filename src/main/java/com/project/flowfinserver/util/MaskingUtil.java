@@ -4,16 +4,12 @@ public class MaskingUtil {
 
     private MaskingUtil() {}
 
-    // 계좌번호 : 앞 25% + * + 뒤 25% (예: 길이 8 → "12****78", 길이 14 → "123********901")
+    // 계좌번호 : 앞 3자리 + ******* + 뒤 4자리 (예: 12345678901 → "123*******8901")
     public static String maskAccountNumber(String accountNumber) {
-        if (accountNumber == null || accountNumber.length() < 4) return accountNumber;
-        int len = accountNumber.length();
-        int showFront = Math.max(1, len / 4);
-        int showBack = Math.max(1, len / 4);
-        int maskLen = len - showFront - showBack;
-        String prefix = accountNumber.substring(0, showFront);
-        String suffix = accountNumber.substring(len - showBack);
-        return prefix + "*".repeat(maskLen) + suffix;
+        if (accountNumber == null || accountNumber.length() < 7) return accountNumber;
+        String prefix = accountNumber.substring(0, 3);
+        String suffix = accountNumber.substring(accountNumber.length() - 4);
+        return prefix + "*******" + suffix;
     }
 
     // 카드 : 앞 6자리 + ****** + 뒤 4자리 (예: 123456******7890)

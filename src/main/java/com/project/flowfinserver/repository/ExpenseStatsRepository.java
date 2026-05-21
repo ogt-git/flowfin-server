@@ -19,7 +19,7 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
            "JOIN e.category c " + // CHANGED
            "WHERE e.userId = :userId " +
            "AND e.isExcluded = false " +
-           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y-%m') = :month " +
+           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y%m') = :month " +
            "GROUP BY c.id") // CHANGED
     List<Object[]> findCategoryStatsByUserIdAndMonth(
             @Param("userId") Long userId,

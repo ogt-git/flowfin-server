@@ -5,17 +5,18 @@ import com.project.flowfinserver.domain.AssetItem;
 import com.project.flowfinserver.domain.CategoryType;
 import com.project.flowfinserver.domain.ManualAsset;
 import com.project.flowfinserver.domain.ManualAssetType;
+import com.project.flowfinserver.domain.ZeroReason;
 import com.project.flowfinserver.dto.asset.AssetSummaryResponse;
 import com.project.flowfinserver.dto.asset.StockAccountResponse;
 import com.project.flowfinserver.dto.asset.StockItemResponse;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
+import com.project.flowfinserver.dto.portfolio.InvestableAmountResult;
 import com.project.flowfinserver.repository.AssetAccountRepository;
 import com.project.flowfinserver.repository.AssetItemRepository;
 import com.project.flowfinserver.repository.CategoryRepository;
 import com.project.flowfinserver.repository.ExpenseRepository;
 import com.project.flowfinserver.repository.ManualAssetRepository;
-import com.project.flowfinserver.repository.PortfolioRepository;
 import com.project.flowfinserver.util.MaskingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,10 +39,9 @@ public class AssetService {
     private final ManualAssetRepository manualAssetRepository;
     private final CategoryRepository categoryRepository;
     private final ExpenseRepository expenseRepository;
-    private final PortfolioRepository portfolioRepository;
 
     private static final List<ManualAssetType> LIQUID_ASSET_TYPES =
-            List.of(ManualAssetType.DEPOSIT, ManualAssetType.SAVINGS, ManualAssetType.CASH);
+            List.of(ManualAssetType.DEPOSIT, ManualAssetType.CASH);
 
     /**
      * 계좌가 있으면 totalAsset·depositReceived 업데이트, 없으면 신규 저장.
@@ -140,29 +140,56 @@ public class AssetService {
     }
 
     /**
-     * 투자 가능 금액을 산출하여 Portfolio 테이블을 동기화한다.
-     * 공식: max(0, 예수금합 + 유동수동자산합 - 고정비월평균 - 비상금(고정비1개월))
-     * 포트폴리오가 없는 경우 계산만 수행하고 업데이트는 건너뜀.
+     * 투자 가능 금액을 산출하여 반환한다. (자산 동기화 완료 후 호출)
+     * Portfolio.investableAmount는 추천 생성 시점의 스냅샷이므로 여기서 갱신하지 않는다.
      */
     @Transactional
     public long updateInvestableAmount(Long userId) {
-        long depositSum = assetAccountRepository.findAllByUserId(userId)
-                .stream().mapToLong(AssetAccount::getDepositReceived).sum();
+        long investable = calculateInvestableAmount(userId).amount();
+        log.debug("[Asset] investable_amount 산출 userId={} result={}", userId, investable);
+        return investable;
+    }
 
+    /**
+     * 투자 가능 금액을 산출하고 플래그 정보를 포함한 결과를 반환한다.
+     * assetLinked=false이면 계산을 시도하지 않고 즉시 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public InvestableAmountResult calculateInvestableAmount(Long userId) {
+        List<AssetAccount> accounts = assetAccountRepository.findAllByUserId(userId);
+        if (accounts.isEmpty()) {
+            return new InvestableAmountResult(false, 0L, ZeroReason.NONE, false);
+        }
+
+        long depositSum = accounts.stream().mapToLong(AssetAccount::getDepositReceived).sum();
         long liquidManualSum = manualAssetRepository
                 .findByUserIdAndAssetTypeIn(userId, LIQUID_ASSET_TYPES)
                 .stream().mapToLong(ManualAsset::getAmount).sum();
 
-        long fixedMonthlyAvg = computeFixedMonthlyAvg(userId);
-        long emergencyFund = fixedMonthlyAvg;
-        long investable = Math.max(0L, depositSum + liquidManualSum - fixedMonthlyAvg - emergencyFund);
+        FixedCostResult fixedCost = computeFixedCost(userId);
+        long fixedMonthlyAvg = fixedCost.monthlyAvg();
+        long emergencyFund = fixedMonthlyAvg;  // 미설정 시 고정비 1개월치 기본 적용
 
-        portfolioRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
-                .ifPresent(p -> p.updateInvestableAmount(investable));
+        long liquidTotal = depositSum + liquidManualSum;
+        long raw = liquidTotal - fixedMonthlyAvg - emergencyFund;
 
-        log.debug("[Asset] investable_amount 갱신 userId={} deposit={} liquidManual={} fixedAvg={} result={}",
-                userId, depositSum, liquidManualSum, fixedMonthlyAvg, investable);
-        return investable;
+        ZeroReason zeroReason;
+        long amount;
+        if (raw > 0) {
+            amount = raw;
+            zeroReason = ZeroReason.NONE;
+        } else if (liquidTotal == 0) {
+            amount = 0L;
+            zeroReason = ZeroReason.CALCULATED_ZERO;
+        } else {
+            amount = 0L;
+            zeroReason = ZeroReason.CLAMPED;
+        }
+
+        log.debug("[Asset] calculateInvestableAmount userId={} deposit={} liquidManual={} fixedAvg={} raw={} result={}",
+                userId, depositSum, liquidManualSum, fixedMonthlyAvg, raw, amount);
+
+        return new InvestableAmountResult(true, amount, zeroReason, fixedCost.missing());
     }
 
     /**
@@ -181,36 +208,13 @@ public class AssetService {
         long totalManualSum = manualAssetRepository.findAllByUserId(userId)
                 .stream().mapToLong(ManualAsset::getAmount).sum();
 
-        long fixedMonthlyAvg = computeFixedMonthlyAvg(userId);
+        long fixedMonthlyAvg = computeFixedCost(userId).monthlyAvg();
         long emergencyFund = fixedMonthlyAvg;
         long investable = Math.max(0L, depositSum + liquidManualSum - fixedMonthlyAvg - emergencyFund);
 
         return new AssetSummaryResponse(
                 totalStockAsset, depositSum, liquidManualSum,
                 totalManualSum, investable, fixedMonthlyAvg, emergencyFund);
-    }
-
-    private long computeFixedMonthlyAvg(Long userId) {
-        LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
-
-        List<Long> fixedCategoryIds = categoryRepository.findByType(CategoryType.FIXED)
-                .stream().map(c -> c.getId()).toList();
-        if (fixedCategoryIds.isEmpty()) return 0L;
-
-        var fixedExpenses = expenseRepository
-                .findByUserIdAndCategoryIdInAndExpenseDateAfter(userId, fixedCategoryIds, threeMonthsAgo);
-        if (fixedExpenses.isEmpty()) return 0L;
-
-        long fixedTotal = fixedExpenses.stream().mapToLong(e -> e.getAmount()).sum();
-
-        // 실제 데이터 기간(최소 1개월)으로 나눠 월 평균 산출
-        LocalDateTime earliest = fixedExpenses.stream()
-                .map(e -> e.getExpenseDate())
-                .min(Comparator.naturalOrder())
-                .orElse(threeMonthsAgo);
-        long months = Math.max(1, ChronoUnit.MONTHS.between(earliest.toLocalDate(), LocalDateTime.now().toLocalDate()));
-
-        return fixedTotal / months;
     }
 
     @Transactional(readOnly = true)
@@ -240,4 +244,33 @@ public class AssetService {
                 })
                 .toList();
     }
+
+    private FixedCostResult computeFixedCost(Long userId) {
+        LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
+
+        List<Long> fixedCategoryIds = categoryRepository.findByType(CategoryType.FIXED)
+                .stream().map(c -> c.getId()).toList();
+        if (fixedCategoryIds.isEmpty()) {
+            return new FixedCostResult(0L, true);
+        }
+
+        var fixedExpenses = expenseRepository
+                .findByUserIdAndCategoryIdInAndExpenseDateAfter(userId, fixedCategoryIds, threeMonthsAgo);
+        if (fixedExpenses.isEmpty()) {
+            return new FixedCostResult(0L, true);
+        }
+
+        long fixedTotal = fixedExpenses.stream().mapToLong(e -> e.getAmount()).sum();
+
+        // 실제 데이터 기간(최소 1개월)으로 나눠 월 평균 산출
+        LocalDateTime earliest = fixedExpenses.stream()
+                .map(e -> e.getExpenseDate())
+                .min(Comparator.naturalOrder())
+                .orElse(threeMonthsAgo);
+        long months = Math.max(1, ChronoUnit.MONTHS.between(earliest.toLocalDate(), LocalDateTime.now().toLocalDate()));
+
+        return new FixedCostResult(fixedTotal / months, false);
+    }
+
+    private record FixedCostResult(long monthlyAvg, boolean missing) {}
 }

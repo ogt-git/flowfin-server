@@ -106,13 +106,14 @@ class AiExpenseClassifierTest {
         given(expenseRepository.findById(EXPENSE_ID))
                 .willReturn(Optional.of(pendingExpense))
                 .willReturn(Optional.of(pendingExpense));
-        given(valueOps.get(anyString())).willReturn("5");
+        given(valueOps.get(anyString())).willReturn("5:85");
         given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
         classifier.classifyAndUpdate(EXPENSE_ID);
 
         then(openAiClient).shouldHaveNoInteractions();
         assertThat(pendingExpense.getClassifiedBy()).isEqualTo(ClassifiedBy.AI);
+        assertThat(pendingExpense.getCategoryConfidence()).isEqualTo(85);
     }
 
     // ==================== OpenAI 호출 ====================

@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import org.springframework.core.task.TaskRejectedException;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -528,11 +530,25 @@ public class CodefSyncService {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        ids.forEach(id -> aiExpenseClassifier.classifyAndUpdate(id));
+                        for (Long id : ids) {
+                            try {
+                                aiExpenseClassifier.classifyAndUpdate(id);
+                            } catch (TaskRejectedException e) {
+                                log.warn("[AiClassify] 큐 포화 → 기타지출 동기 확정 expenseId={}", id);
+                                aiExpenseClassifier.fallbackToEtc(id);
+                            }
+                        }
                     }
                 });
             } else {
-                ids.forEach(id -> aiExpenseClassifier.classifyAndUpdate(id));
+                for (Long id : ids) {
+                    try {
+                        aiExpenseClassifier.classifyAndUpdate(id);
+                    } catch (TaskRejectedException e) {
+                        log.warn("[AiClassify] 큐 포화 → 기타지출 동기 확정 expenseId={}", id);
+                        aiExpenseClassifier.fallbackToEtc(id);
+                    }
+                }
             }
         }
 

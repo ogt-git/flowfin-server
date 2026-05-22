@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -31,6 +33,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class CodefService {
+
+    private static final DateTimeFormatter BILLING_DATE_FMT =
+            DateTimeFormatter.ofPattern("yyyyMM");
 
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
@@ -184,11 +189,16 @@ public class CodefService {
     /**
      * 최초 연동 직후 CODEF API를 호출하여 카드 청구 내역 또는 증권 자산을 즉시 수집한다.
      * @Async — Spring 프록시를 통해 호출되어야 비동기 동작 (self 필드로 호출)
+     *
+     * createAccount 완료 직후 금융기관(특히 신한카드) 서버에 세션이 남아 있으면
+     * CF-12201(중복 로그인)이 발생하므로, 5초 대기 후 동기화를 시작한다.
+     * CF-12201 재발 시 추가 5초 대기 후 1회 재시도한다.
      */
     @Async
     public void triggerInitialSync(Long userId, CodefConnectedAccount connection) {
         log.info("[InitialSync] 최초 동기화 시작 userId={} org={} type={}",
                 userId, connection.getOrganizationCode(), connection.getAccountType());
+        sleepQuietly(5_000);
         if (connection.getAccountType() == AccountType.CARD) {
             fetchAndSaveCardBilling(userId, connection);
         } else if (connection.getAccountType() == AccountType.STOCK) {
@@ -201,8 +211,21 @@ public class CodefService {
         try {
             codefSyncService.syncConnection(connection);
         } catch (Exception e) {
-            log.warn("[InitialSync] CARD 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
-            throw new RuntimeException(e);
+            if (isDuplicateLoginException(e)) {
+                log.warn("[InitialSync] CF-12201 중복 로그인 — 5초 후 재시도 userId={} org={}",
+                        userId, connection.getOrganizationCode());
+                sleepQuietly(5_000);
+                try {
+                    codefSyncService.syncConnection(connection);
+                } catch (Exception retry) {
+                    log.warn("[InitialSync] CARD 재시도 실패 userId={} org={}",
+                            userId, connection.getOrganizationCode(), retry);
+                    return;
+                }
+            } else {
+                log.warn("[InitialSync] CARD 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
+                return;
+            }
         }
         log.info("[InitialSync] CARD 최초 동기화 완료 userId={} org={}", userId, connection.getOrganizationCode());
     }
@@ -212,10 +235,36 @@ public class CodefService {
         try {
             codefSyncService.syncConnection(connection);
         } catch (Exception e) {
-            log.warn("[InitialSync] STOCK 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
-            throw new RuntimeException(e);
+            if (isDuplicateLoginException(e)) {
+                log.warn("[InitialSync] CF-12201 중복 로그인 — 5초 후 재시도 userId={} org={}",
+                        userId, connection.getOrganizationCode());
+                sleepQuietly(5_000);
+                try {
+                    codefSyncService.syncConnection(connection);
+                } catch (Exception retry) {
+                    log.warn("[InitialSync] STOCK 재시도 실패 userId={} org={}",
+                            userId, connection.getOrganizationCode(), retry);
+                    return;
+                }
+            } else {
+                log.warn("[InitialSync] STOCK 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
+                return;
+            }
         }
         log.info("[InitialSync] STOCK 최초 동기화 완료 userId={} org={}", userId, connection.getOrganizationCode());
+    }
+
+    private boolean isDuplicateLoginException(Exception e) {
+        Throwable cause = e instanceof RuntimeException && e.getCause() != null ? e.getCause() : e;
+        return cause.getMessage() != null && cause.getMessage().contains("CF-12201");
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // 증권 계좌번호 등록 (연결 후 별도 등록)
@@ -235,7 +284,10 @@ public class CodefService {
         params.put("connectedId", request.getConnectedId());
         params.put("organization", request.getOrganization());
 
-        if (hasValue(request.getStartDate()))           params.put("startDate", request.getStartDate());
+        String startDate = hasValue(request.getStartDate())
+                ? request.getStartDate()
+                : LocalDate.now().minusMonths(3).format(BILLING_DATE_FMT);
+        params.put("startDate", startDate);
         if (hasValue(request.getEndDate()))             params.put("endDate", request.getEndDate());
         if (hasValue(request.getBirthDate()))           params.put("birthDate", request.getBirthDate());
         if (hasValue(request.getInquiryType()))         params.put("inquiryType", request.getInquiryType());

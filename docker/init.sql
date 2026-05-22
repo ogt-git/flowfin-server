@@ -244,7 +244,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('LG유플러스',      3, 'EXACT',   100),
 ('LGU+',            3, 'EXACT',   100),
 ('SK브로드밴드',    3, 'EXACT',   100),
-('SK텔레콤',        3, 'CONTAINS', 95),
+('SK텔레콤',        3, 'EXACT', 100),
 ('KT인터넷',        3, 'CONTAINS', 90),
 ('U+인터넷',        3, 'CONTAINS', 90),
 ('알뜰폰',          3, 'CONTAINS', 85),
@@ -273,10 +273,11 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('인터넷수능방송', 4, 'CONTAINS', 90),
 ('반디앤루니스',    4, 'EXACT',   100),
 ('밀리의서재',      4, 'EXACT',   100),
-('리디',            4, 'EXACT',   100),
+
 ('시원스쿨',        4, 'EXACT',   100),
 ('스픽',            4, 'EXACT',   100),
 ('영단기',          4, 'EXACT',   100),
+('리디',            4, 'CONTAINS',   90),
 ('학원',            4, 'CONTAINS', 90),
 ('교습소',          4, 'CONTAINS', 85),
 ('과외',            4, 'CONTAINS', 80),
@@ -324,12 +325,12 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('피자헛',          5, 'EXACT',   100),
 ('파파존스',        5, 'EXACT',   100),
 ('피자알볼로',      5, 'EXACT',   100),
-('피자',      5, 'EXACT',   100),
+('피자',      5, 'CONTAINS',   95),
 ('치킨',      5, 'CONTAINS',   95),
+('BBQ',             5, 'CONTAINS',   95),
 ('굽네치킨',        5, 'EXACT',   100),
 ('교촌치킨',        5, 'EXACT',   100),
 ('BBQ치킨',         5, 'EXACT',   100),
-('BBQ',             5, 'EXACT',   100),
 ('BHC',             5, 'EXACT',   100),
 ('처갓집양념치킨',  5, 'EXACT',   100),
 ('네네치킨',        5, 'EXACT',   100),
@@ -496,7 +497,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('패션',            8, 'CONTAINS', 70),
 
 -- ============================================================
--- 문화/여가비 (9) — OTT, 음악, 숙박, 영화관, 게임, 스포츠
+-- 문화여가비 (9) — OTT, 음악, 숙박, 영화관, 게임, 스포츠
 -- ============================================================
 -- OTT
 ('넷플릭스',        9, 'EXACT',   100),
@@ -607,11 +608,12 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 
 
 -- 기타/간편결제 (11) - 상호명 파악 불가
+INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, priority) VALUES
 ('비바리퍼블리카', 11, 'CONTAINS', 70), -- 토스
 ('네이버파이낸셜', 11, 'CONTAINS', 70), -- 네이버페이
 ('카카오페이', 11, 'CONTAINS', 60),
 ('네이버페이', 11, 'CONTAINS', 60),
 ('나이스페이', 11, 'CONTAINS', 60),    -- PG사 (MCC 확인 필요 구간)
-('KCP', 11, 'CONTAINS', 60);         -- PG사
-('쿠팡', 11, 'CONTAINS', 75),            -- 쿠팡, 쿠팡이츠
+('KCP', 11, 'CONTAINS', 60),          -- PG사
+('쿠팡', 11, 'CONTAINS', 75);             -- 쿠팡, 쿠팡이츠
 

@@ -9,9 +9,6 @@ public record CardBillingDto(
         LocalDateTime expenseDate,
         // resPaymentType: "1"=일시불 "2"=할부 "3"=그외 "4"=단기카드대출 "5"=장기카드대출
         // "4","5"이면 is_excluded=true 처리 (대출성 거래는 지출 제외)
-        String paymentType,
-        // resCancelYn: "Y"=취소 거래, is_excluded=true 처리
-        boolean cancelled,
-        // resOverseasYn: "Y"=해외 결제, is_excluded=true 처리
-        boolean overseas
+        // 취소 거래는 resUsedAmount가 음수로 오므로 음수 금액 그대로 저장 (별도 플래그 불필요)
+        String paymentType
 ) {}

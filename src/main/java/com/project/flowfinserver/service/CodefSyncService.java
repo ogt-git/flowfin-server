@@ -6,10 +6,12 @@ import com.project.flowfinserver.codef.CodefApiClient;
 import com.project.flowfinserver.codef.CodefErrorClassifier;
 import com.project.flowfinserver.domain.*;
 import com.project.flowfinserver.dto.codef.CardBillingDto;
+import com.project.flowfinserver.dto.ExpenseSaveResult;
 import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.exception.*;
+import com.project.flowfinserver.openai.AiExpenseClassifier;
 import com.project.flowfinserver.util.MaskingUtil;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -39,9 +45,17 @@ public class CodefSyncService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMM");
     private static final DateTimeFormatter PARSE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
+    // 2026-05-20 기준 고정 환율: 1 USD = 1,500 KRW
+    private static final long USD_TO_KRW_RATE = 1_500L;
+    // 평가금액·매입금액·평가손익이 항상 원화로 내려오는 기관
+    private static final Set<String> GROUP_A_ORGS = Set.of("0218", "0247", "1247");
+    // resAccountCurrency 신뢰 불가 — 전 필드 원화로 간주하는 기관
+    private static final Set<String> GROUP_B_ORGS = Set.of("0267", "1267", "0287");
+
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
     private final ExpenseSaveService expenseSaveService;
+    private final AiExpenseClassifier aiExpenseClassifier;
     private final AssetService assetService;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate stringRedisTemplate;
@@ -212,7 +226,22 @@ public class CodefSyncService {
         List<StockItemDto> items = new ArrayList<>();
         if (itemList.isArray()) {
             for (JsonNode item : itemList) {
-                long valuationAmt = parseLongField(item, "resValuationAmt");
+                String currencyCode = firstNonEmpty(item, "resAccountCurrency");
+
+                long valuationAmt;
+                long purchaseAmt;
+                long valuationPL;
+
+                if (GROUP_A_ORGS.contains(organizationCode) || GROUP_B_ORGS.contains(organizationCode)) {
+                    valuationAmt = parseLongField(item, "resValuationAmt");
+                    purchaseAmt  = parseLongField(item, "resPurchaseAmount");
+                    valuationPL  = parseLongField(item, "resValuationPL");
+                } else {
+                    // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
+                    valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                    purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                    valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                }
                 totalAsset += valuationAmt;
 
                 String itemCode = firstNonEmpty(item, "resItemCode");
@@ -230,9 +259,9 @@ public class CodefSyncService {
                         firstNonEmpty(item, "resItemName"),
                         itemCode,
                         (int) parseLongField(item, "resQuantity"),
-                        parseLongField(item, "resPurchaseAmount"),
+                        purchaseAmt,
                         valuationAmt,
-                        parseLongField(item, "resValuationPL"),
+                        valuationPL,
                         earningsRate
                 ));
             }
@@ -416,11 +445,27 @@ public class CodefSyncService {
         JsonNode data = root.path("data");
         JsonNode itemList = data.path("resItemList");
 
+        String organization = account.getOrganizationCode();
         long totalAsset = 0L;
         List<StockItemDto> items = new ArrayList<>();
         if (itemList.isArray()) {
             for (JsonNode item : itemList) {
-                long valuationAmt = parseLongField(item, "resValuationAmt");
+                String currencyCode = firstNonEmpty(item, "resAccountCurrency");
+
+                long valuationAmt;
+                long purchaseAmt;
+                long valuationPL;
+
+                if (GROUP_A_ORGS.contains(organization) || GROUP_B_ORGS.contains(organization)) {
+                    valuationAmt = parseLongField(item, "resValuationAmt");
+                    purchaseAmt  = parseLongField(item, "resPurchaseAmount");
+                    valuationPL  = parseLongField(item, "resValuationPL");
+                } else {
+                    // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
+                    valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                    purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                    valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                }
                 totalAsset += valuationAmt;
 
                 String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
@@ -431,9 +476,9 @@ public class CodefSyncService {
                         firstNonEmpty(item, "resItemName"),
                         firstNonEmpty(item, "resItemCode"),
                         (int) parseLongField(item, "resQuantity"),
-                        parseLongField(item, "resPurchaseAmount"),
+                        purchaseAmt,
                         valuationAmt,
-                        parseLongField(item, "resValuationPL"),
+                        valuationPL,
                         earningsRate
                 ));
             }
@@ -441,7 +486,7 @@ public class CodefSyncService {
 
         long depositReceived = parseLongField(data, "resDepositReceived");
         StockAssetDto assetDto = new StockAssetDto(
-                account.getOrganizationCode(), account.getAccountNumber(), totalAsset, depositReceived);
+                organization, account.getAccountNumber(), totalAsset, depositReceived);
         AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
         if (!items.isEmpty()) {
             assetService.saveOrUpdateItems(assetAccount, items);
@@ -452,38 +497,46 @@ public class CodefSyncService {
     }
 
     // txArray → CardBillingDto 리스트 변환 후 ExpenseSaveService 위임
-    // 분류(Rule→GPT→Fallback) + 중복 스킵은 ExpenseSaveService 내부에서 처리
+    // Rule 분류 + 중복 스킵은 ExpenseSaveService, Rule 실패 건은 트랜잭션 커밋 후 AiExpenseClassifier로 비동기 투입
     private int[] saveExpensesFromTxArray(Long userId, String organizationCode, JsonNode txArray) {
         List<CardBillingDto> items = new ArrayList<>();
-        int cancelledCount = 0, foreignCount = 0;
-
         for (JsonNode tx : txArray) {
             String dateStr   = firstNonEmpty(tx, "resUsedDate");
             String merchant  = firstNonEmpty(tx, "resMemberStoreName");
             String amountStr = firstNonEmpty(tx, "resUsedAmount", "resPaymentAmt", "resPaymentPrincipal")
-                    .replaceAll("[^0-9]", "");
+                    .replaceAll("[^0-9\\-]", "");
 
             if (dateStr.isEmpty() || merchant.isEmpty() || amountStr.isEmpty()) continue;
 
             long amount = Long.parseLong(amountStr);
-            if (amount <= 0) continue;
+            if (amount == 0) continue;
 
             String paymentType = firstNonEmpty(tx, "resPaymentType");
-            boolean cancelled  = "Y".equalsIgnoreCase(firstNonEmpty(tx, "resCancelYn"));
-            boolean overseas   = "Y".equalsIgnoreCase(firstNonEmpty(tx, "resOverseasYn"));
-            if (cancelled) cancelledCount++;
-            if (overseas)  foreignCount++;
 
             LocalDateTime expenseDate = LocalDate.parse(dateStr, PARSE_FMT).atStartOfDay();
-            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate,
-                    paymentType, cancelled, overseas));
+            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate, paymentType));
         }
 
-        log.info("[CODEF] 청구 내역 파싱 org={} total={} cancelled={} overseas={}",
-                organizationCode, items.size(), cancelledCount, foreignCount);
+        log.info("[CODEF] 청구 내역 파싱 org={} total={}", organizationCode, items.size());
 
-        int saved = expenseSaveService.saveExpenses(userId, items);
-        return new int[]{saved, items.size() - saved};
+        ExpenseSaveResult result = expenseSaveService.saveExpenses(userId, items);
+
+        // AI 분류 대기 Expense → 트랜잭션 커밋 후 비동기 큐 투입
+        if (!result.pendingAiIds().isEmpty()) {
+            List<Long> ids = result.pendingAiIds();
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        ids.forEach(id -> aiExpenseClassifier.classifyAndUpdate(id));
+                    }
+                });
+            } else {
+                ids.forEach(id -> aiExpenseClassifier.classifyAndUpdate(id));
+            }
+        }
+
+        return new int[]{result.savedCount(), items.size() - result.savedCount()};
     }
 
     private String firstNonEmpty(JsonNode node, String... fields) {
@@ -495,7 +548,19 @@ public class CodefSyncService {
     }
 
     private long parseLongField(JsonNode node, String... fields) {
-        String raw = firstNonEmpty(node, fields).replaceAll("[^0-9\\-]", "");
-        return raw.isEmpty() ? 0L : Long.parseLong(raw);
+        String raw = firstNonEmpty(node, fields).replaceAll("[^0-9.\\-]", "");
+        if (raw.isEmpty()) return 0L;
+        try {
+            return Math.round(Double.parseDouble(raw));
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
+    private long toKrw(long amount, String currencyCode) {
+        if ("USD".equalsIgnoreCase(currencyCode)) {
+            return amount * USD_TO_KRW_RATE;
+        }
+        return amount;
     }
 }

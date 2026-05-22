@@ -49,8 +49,15 @@ HTTPS (SSL/TLS) 전구간 적용
 ### 외부 API
 ```
 CODEF API — 카드 청구 내역, 증권 종합자산
-OpenAI API — GPT-4 (지출 분석, 포트폴리오 추천, 카테고리 AI 분류)
+OpenAI API
+  ├─ gpt-4.1-nano  — 지출 카테고리 AI 분류 (Rule-based fallback)
+  └─ gpt-4o         — 포트폴리오 추천 (AI 진단·자산 배분)
 ```
+
+> 모델 선정 근거:
+> - 지출 분류: 단순 카테고리 매핑 작업 — 저비용·고속 모델(`gpt-4.1-nano`)로 비용 최소화
+> - 포트폴리오 추천: 투자성향·자산 분석·배분 추론이 필요한 작업 — 고성능 모델(`gpt-4o`) 사용
+    > 모델명은 `application.yml`에서 주입받아 사용 (12. 환경 변수 참조). 코드 내 하드코딩 금지.
 
 ---
 
@@ -298,7 +305,7 @@ JPA에서 중복 삽입 시 `DataIntegrityViolationException`을 반드시 catch
 - DB 명세서 기준 `parent_id` 컬럼 없음 — 별도 계층 구조 사용 금지
 
 | ID | 카테고리명 | type |
-|----|-----------|------|
+|----|----------|------|
 | 1 | 주거비 | FIXED |
 | 2 | 보험비 | FIXED |
 | 3 | 통신비 | FIXED |
@@ -307,7 +314,7 @@ JPA에서 중복 삽입 시 `DataIntegrityViolationException`을 반드시 catch
 | 6 | 생활비 | VARIABLE |
 | 7 | 교통비 | VARIABLE |
 | 8 | 의류비 | VARIABLE |
-| 9 | 문화/여가비 | VARIABLE |
+| 9 | 문화여가비 | VARIABLE |
 | 10 | 의료비 | ETC |
 | 11 | 기타지출 | ETC |
 
@@ -348,21 +355,24 @@ JPA에서 중복 삽입 시 `DataIntegrityViolationException`을 반드시 catch
  - keyword_rule 테이블에서 merchant_name 키워드 매핑
  - 매칭 성공 → classified_by = 'RULE', confidence = 100
         ↓ (매칭 실패 또는 confidence < 임계값)
-[GPT-4 AI 분류 호출]
+[AI 분류 호출 — model: gpt-4.1-nano]
  - 가맹점명 + 금액을 프롬프트로 전달
  - 11개 카테고리 중 선택 + confidence 반환
- - classified_by = 'AI', category_confidence = GPT 응답값
+ - classified_by = 'AI', category_confidence = 모델 응답값
         ↓
 [DB 저장]
 ```
 
+**사용 모델**: `gpt-4.1-nano` (지출 분류 전용 — 저비용·고속 모델)
+→ 모델명은 `application.yml`의 `openai.model.classification` 키에서 주입받아 사용 (코드 하드코딩 금지)
+
 **AI 분류 임계값**: `category_confidence < 60` → 기타지출(ID=11)로 fallback 처리
 
-**프롬프트 기본 형식**:
+**프롬프트 기본 형식** (`gpt-4.1-nano` 호출 시):
 ```
 다음 카드 거래를 아래 카테고리 중 하나로 분류하고 신뢰도(0~100)를 JSON으로 반환하라.
 가맹점: {merchant_name}, 금액: {amount}원
-카테고리: [주거비, 보험비, 통신비, 교육비, 식비, 생활비, 교통비, 의류비, 문화/여가비, 의료비, 기타지출]
+카테고리: [주거비, 보험비, 통신비, 교육비, 식비, 생활비, 교통비, 의류비, 문화여가비, 의료비, 기타지출]
 응답 형식: {"category": "식비", "confidence": 85}
 ```
 
@@ -583,8 +593,9 @@ POST   /api/assets/manual        수동 자산 입력   body: assetType(예금|�
 ```
 POST   /api/portfolio/recommend  포트폴리오 추천 생성  body: riskType
                                   → 투자성향(/api/users/tendency) 선행 저장 필요
-                                  → User.risk_type 기준으로 GPT-4 호출 → Portfolio 테이블 저장
+                                  → User.risk_type 기준으로 gpt-4o 호출 → Portfolio 테이블 저장
                                      (portfolio_risk_type, recommended_assets JSON, investable_amount)
+                                  → 모델: gpt-4o (application.yml의 openai.model.portfolio에서 주입)
 GET    /api/portfolio            포트폴리오 조회       header: Authorization → 최신 추천 결과
 GET    /api/portfolio/history    추천 이력 조회        header: Authorization → 마이페이지용
 ```
@@ -812,6 +823,21 @@ codef:
 
 openai:
   api-key: ${OPENAI_API_KEY}
+  model:
+    classification: ${OPENAI_MODEL_CLASSIFICATION:gpt-4.1-nano}  # 지출 카테고리 AI 분류
+    portfolio:      ${OPENAI_MODEL_PORTFOLIO:gpt-4o}             # 포트폴리오 추천
+```
+
+> 모델명을 yml에서 주입받는 이유: 추후 모델 교체(가격/성능 변경) 시 코드 수정 없이 환경 변수만으로 대응 가능.
+> 두 모델 모두 같은 `OPENAI_API_KEY`를 공유하므로 키는 분리하지 않는다.
+
+서비스 코드 사용 예:
+```java
+@Value("${openai.model.classification}")
+private String classificationModel;  // → "gpt-4.1-nano"
+
+@Value("${openai.model.portfolio}")
+private String portfolioModel;       // → "gpt-4o"
 ```
 
 ---

@@ -31,6 +31,9 @@ public class Portfolio {
     @Column(name = "recommended_assets", columnDefinition = "JSON")
     private Map<String, Object> recommendedAssets;
 
+    @Column(name = "portfolio_risk_type", length = 50)
+    private String portfolioRiskType;
+
     @Column(name = "investable_amount")
     private Long investableAmount;
 

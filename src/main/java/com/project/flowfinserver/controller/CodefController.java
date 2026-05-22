@@ -3,6 +3,7 @@ package com.project.flowfinserver.controller;
 import com.project.flowfinserver.dto.ApiResponse;
 import com.project.flowfinserver.dto.codef.CodefCardRequest;
 import com.project.flowfinserver.dto.codef.CodefConnectRequest;
+import com.project.flowfinserver.dto.codef.CodefConnectionResponse;
 import com.project.flowfinserver.dto.codef.CodefStockRequest;
 import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
 import com.project.flowfinserver.exception.ErrorCode;
@@ -18,8 +19,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @Tag(name = "CODEF", description = "CODEF 계정 연결 및 금융 데이터 동기화 API")
 @RestController
@@ -29,6 +33,16 @@ public class CodefController {
 
     private final CodefService codefService;
     private final CodefSyncService codefSyncService;
+
+    @Operation(summary = "연동 계정 목록 조회", description = "활성화된 CODEF 연동 계정 목록을 반환합니다.")
+    @GetMapping("/connections")
+    public ResponseEntity<ApiResponse<List<CodefConnectionResponse>>> getConnections(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        List<CodefConnectionResponse> connections = codefService.getConnections(userId).stream()
+                .map(CodefConnectionResponse::new)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(connections));
+    }
 
     @Operation(summary = "금융기관 계정 연결",
             description = "카드/증권 CODEF connectedId를 발급받아 DB에 저장합니다. businessType: CD=카드, ST=증권. " +

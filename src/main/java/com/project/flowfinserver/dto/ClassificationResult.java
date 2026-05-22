@@ -29,4 +29,9 @@ public class ClassificationResult {
     public static ClassificationResult ofFallback(Category fallbackCategory) { // CHANGED
         return new ClassificationResult(fallbackCategory, ClassifiedBy.AI, 0);
     }
+
+    // Rule 분류 실패 → 트랜잭션 내 저장 후 비동기 AI 분류 대기 상태
+    public static ClassificationResult pending() {
+        return new ClassificationResult(null, ClassifiedBy.PENDING, null);
+    }
 }

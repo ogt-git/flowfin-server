@@ -24,6 +24,9 @@ public class Portfolio {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "portfolio_risk_type", length = 20)
+    private String portfolioRiskType;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "recommended_assets", columnDefinition = "JSON")
     private Map<String, Object> recommendedAssets;

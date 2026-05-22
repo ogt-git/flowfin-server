@@ -4,7 +4,7 @@ public class MaskingUtil {
 
     private MaskingUtil() {}
 
-    // 계좌번호 : 앞 3자리 + ******* + 뒤 4자리 (예: 123*******4567)
+    // 계좌번호 : 앞 3자리 + ******* + 뒤 4자리 (예: 12345678901 → "123*******8901")
     public static String maskAccountNumber(String accountNumber) {
         if (accountNumber == null || accountNumber.length() < 7) return accountNumber;
         String prefix = accountNumber.substring(0, 3);

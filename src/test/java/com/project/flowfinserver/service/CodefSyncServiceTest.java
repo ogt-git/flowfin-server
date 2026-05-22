@@ -4,11 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.flowfinserver.codef.CodefApiClient;
 import com.project.flowfinserver.domain.AccountType;
 import com.project.flowfinserver.domain.CodefConnectedAccount;
+import com.project.flowfinserver.dto.ExpenseSaveResult;
 import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
-import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.exception.CodefAccountNotFoundException;
 import com.project.flowfinserver.exception.TooManyRequestsException;
+import com.project.flowfinserver.openai.AiExpenseClassifier;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +35,7 @@ class CodefSyncServiceTest {
     @Mock CodefApiClient codefApiClient;
     @Mock CodefConnectedAccountRepository connectedAccountRepository;
     @Mock ExpenseSaveService expenseSaveService;
+    @Mock AiExpenseClassifier aiExpenseClassifier;
     @Mock AssetService assetService;
     @Spy  ObjectMapper objectMapper;
     @Mock StringRedisTemplate stringRedisTemplate;
@@ -141,7 +143,8 @@ class CodefSyncServiceTest {
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of(cardAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_SUCCESS_RESPONSE);
-        given(expenseSaveService.saveExpenses(eq(TEST_USER_ID), any())).willReturn(3);
+        given(expenseSaveService.saveExpenses(eq(TEST_USER_ID), any()))
+                .willReturn(new ExpenseSaveResult(3, List.of()));
 
         CodefSyncResultDto result = codefSyncService.syncCard(TEST_USER_ID);
 

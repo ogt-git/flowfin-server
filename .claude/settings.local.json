@@ -71,7 +71,9 @@
       "Bash(rm \"C:\\\\Users\\\\rudxo\\\\intelliJ\\\\flowfin-server\\\\src\\\\main\\\\java\\\\com\\\\project\\\\flowfinserver\\\\dto\\\\expense\\\\ExpenseItemResponse.java\")",
       "Bash(xargs cat *)",
       "Bash(grep -v \"^--$\")",
-      "Bash(findstr :8080)"
+      "Bash(findstr :8080)",
+      "Bash(git ls-tree *)",
+      "Bash(git log *)"
     ]
   }
 }

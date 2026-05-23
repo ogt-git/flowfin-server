@@ -186,6 +186,11 @@ public class CodefService {
         log.info("[Disconnect] connectionId={} userId={} deactivated", connectionId, userId);
     }
 
+    @Transactional(readOnly = true)
+    public List<CodefConnectedAccount> getConnections(Long userId) {
+        return connectedAccountRepository.findAllByUserIdAndIsActiveTrue(userId);
+    }
+
     /**
      * 최초 연동 직후 CODEF API를 호출하여 카드 청구 내역 또는 증권 자산을 즉시 수집한다.
      * @Async — Spring 프록시를 통해 호출되어야 비동기 동작 (self 필드로 호출)

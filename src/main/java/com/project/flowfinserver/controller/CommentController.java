@@ -5,6 +5,7 @@ import com.project.flowfinserver.dto.CommentResponse;
 import com.project.flowfinserver.service.CommentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,16 +26,18 @@ public class CommentController {
     public ResponseEntity<CommentResponse> createComment(
             @PathVariable Long communityId,
             @RequestBody CommentRequest request,
-            @RequestHeader("Authorization") String token) {
-        return ResponseEntity.ok(commentService.createComment(communityId, request, token));
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(commentService.createComment(communityId, request, userId));
     }
 
     @DeleteMapping("/{commentId}")
     public ResponseEntity<Void> deleteComment(
             @PathVariable Long communityId,
             @PathVariable Long commentId,
-            @RequestHeader("Authorization") String token) {
-        commentService.deleteComment(communityId, commentId, token);
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        commentService.deleteComment(communityId, commentId, userId);
         return ResponseEntity.noContent().build();
     }
 }

@@ -73,7 +73,8 @@
       "Bash(grep -v \"^--$\")",
       "Bash(findstr :8080)",
       "Bash(git ls-tree *)",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(grep -E \"\\\\.\\(java|kt\\)$\")"
     ]
   }
 }

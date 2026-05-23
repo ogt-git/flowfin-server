@@ -11,7 +11,6 @@ import com.project.flowfinserver.repository.AssetItemRepository;
 import com.project.flowfinserver.repository.CategoryRepository;
 import com.project.flowfinserver.repository.ExpenseRepository;
 import com.project.flowfinserver.repository.ManualAssetRepository;
-import com.project.flowfinserver.repository.PortfolioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,7 +41,6 @@ class AssetServiceTest {
     @Mock ManualAssetRepository manualAssetRepository;
     @Mock CategoryRepository categoryRepository;
     @Mock ExpenseRepository expenseRepository;
-    @Mock PortfolioRepository portfolioRepository;
 
     @InjectMocks
     AssetService assetService;
@@ -61,7 +59,6 @@ class AssetServiceTest {
         given(categoryRepository.findByType(any(CategoryType.class))).willReturn(List.of());
         given(manualAssetRepository.findByUserIdAndAssetTypeIn(anyLong(), any())).willReturn(List.of());
         given(assetAccountRepository.findAllByUserId(anyLong())).willReturn(List.of());
-        given(portfolioRepository.findTopByUserIdOrderByCreatedAtDesc(anyLong())).willReturn(Optional.empty());
     }
 
     // ==================== saveOrUpdateAccount ====================

@@ -53,14 +53,16 @@ public class AiExpenseClassifier {
         // 2. Redis 캐시 히트
         String cached = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
-            Long categoryId = Long.parseLong(cached);
+            String[] parts = cached.split(":");
+            Long categoryId = Long.parseLong(parts[0]);
+            int confidence = parts.length > 1 ? Integer.parseInt(parts[1]) : 100;
             Category category = categoryRepository.findById(categoryId).orElseGet(this::fallbackCategory);
 
             // race condition 최종 방어
             Expense fresh = expenseRepository.findById(expenseId).orElse(null);
             if (fresh == null || fresh.isUserModified()) return;
-            fresh.updateCategory(category, ClassifiedBy.AI, 100);
-            log.debug("[AiClassify] 캐시 히트 expenseId={} categoryId={}", expenseId, categoryId);
+            fresh.updateCategory(category, ClassifiedBy.AI, confidence);
+            log.debug("[AiClassify] 캐시 히트 expenseId={} categoryId={} confidence={}", expenseId, categoryId, confidence);
             return;
         }
 
@@ -75,10 +77,10 @@ public class AiExpenseClassifier {
             return;
         }
 
-        // 4. Redis 캐싱 (카테고리 ID만, TTL 7일)
+        // 4. Redis 캐싱 (카테고리 ID:confidence, TTL 7일)
         if (result.getCategory() != null) {
-            stringRedisTemplate.opsForValue().set(
-                    cacheKey, String.valueOf(result.getCategory().getId()), CACHE_TTL_DAYS, TimeUnit.DAYS);
+            String cacheValue = result.getCategory().getId() + ":" + result.getConfidence();
+            stringRedisTemplate.opsForValue().set(cacheKey, cacheValue, CACHE_TTL_DAYS, TimeUnit.DAYS);
         }
 
         // 5. race condition 최종 방어 후 UPDATE
@@ -90,6 +92,15 @@ public class AiExpenseClassifier {
                 expenseId,
                 result.getCategory() != null ? result.getCategory().getId() : null,
                 result.getConfidence());
+    }
+
+    /**
+     * 큐 포화(AbortPolicy 거부) 시 호출부에서 직접 기타지출로 동기 확정.
+     * REQUIRES_NEW로 별도 트랜잭션을 보장한다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void fallbackToEtc(Long expenseId) {
+        applyFallback(expenseId);
     }
 
     private void applyFallback(Long expenseId) {

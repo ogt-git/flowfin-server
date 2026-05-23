@@ -2,7 +2,6 @@ package com.project.flowfinserver.asset;
 
 import com.project.flowfinserver.domain.AssetAccount;
 import com.project.flowfinserver.domain.AssetItem;
-import com.project.flowfinserver.domain.CategoryType;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.repository.*;
@@ -36,7 +35,6 @@ class AssetServiceTest {
     @Mock ManualAssetRepository manualAssetRepository;
     @Mock CategoryRepository categoryRepository;
     @Mock ExpenseRepository expenseRepository;
-    @Mock PortfolioRepository portfolioRepository;
 
     @Spy
     @InjectMocks
@@ -52,12 +50,11 @@ class AssetServiceTest {
         return new StockItemDto("주식", "삼성전자", itemCode, 10, 700_000L, 800_000L, 100_000L, new BigDecimal("14.28"));
     }
 
-    // updateInvestableAmount 내부 의존성 stubbing (공통 셋업용 헬퍼)
+    // updateInvestableAmount → calculateInvestableAmount 내부 의존성 stubbing
+    // findAllByUserId 가 빈 리스트를 반환하면 calculateInvestableAmount 가 즉시 반환(assetLinked=false)하여
+    // manualAsset/category/expense 저장소는 호출되지 않는다.
     private void stubUpdateInvestable() {
         given(assetAccountRepository.findAllByUserId(USER_ID)).willReturn(List.of());
-        given(manualAssetRepository.findByUserIdAndAssetTypeIn(eq(USER_ID), any())).willReturn(List.of());
-        given(categoryRepository.findByType(CategoryType.FIXED)).willReturn(List.of());
-        given(portfolioRepository.findTopByUserIdOrderByCreatedAtDesc(USER_ID)).willReturn(Optional.empty());
     }
 
     @Test

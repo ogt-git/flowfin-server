@@ -51,6 +51,11 @@ public class ExpenseController {
             month = YearMonth.now().format(MONTH_FMT);
         }
 
+        // "202605" → "2026-05" 자동 정규화
+        if (month.matches("\\d{6}")) {
+            month = month.substring(0, 4) + "-" + month.substring(4);
+        }
+
         if (!MONTH_PATTERN.matcher(month).matches()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("month 형식은 YYYYMM 이어야 합니다.", "INVALID_MONTH_FORMAT"));

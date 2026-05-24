@@ -51,7 +51,6 @@ public class User {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-
     public static User create(String email, String emailHash, String password, String name, String riskType) {
         User user = new User();
         user.email = email;
@@ -60,6 +59,19 @@ public class User {
         user.name = name;
         user.riskType = riskType;
         return user;
+    }
+
+    public void updateRiskType(String riskType) {
+        this.riskType = riskType;
+    }
+
+    public void updateProfile(String name, String riskType) {
+        if (name != null && !name.isBlank()) this.name = name;
+        if (riskType != null && !riskType.isBlank()) this.riskType = riskType;
+    }
+
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
     }
 
     public void updateRefreshToken(String refreshToken, LocalDateTime tokenExpiredAt) {

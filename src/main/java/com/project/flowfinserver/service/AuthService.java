@@ -5,6 +5,7 @@ import com.project.flowfinserver.dto.*;
 import com.project.flowfinserver.jwt.JwtUtil;
 import com.project.flowfinserver.repository.UserRepository;
 import com.project.flowfinserver.util.AesEncryptionUtil;
+import com.project.flowfinserver.util.MaskingUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -49,7 +50,8 @@ public class AuthService {
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
         redisTokenService.saveRefreshToken(user.getId(), refreshToken);
 
-        return new LoginResponse(user.getId(), accessToken, refreshToken, user.getName());
+        return new LoginResponse(user.getId(), accessToken, refreshToken, user.getName(),
+                MaskingUtil.maskEmail(user.getEmail()), user.getRiskType());
     }
 
     // RTR: 리프레시 토큰 검증 → 새 토큰 쌍 발급, 기존 토큰 즉시 삭제

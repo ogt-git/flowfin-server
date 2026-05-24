@@ -3,9 +3,11 @@ package com.project.flowfinserver.controller;
 import com.project.flowfinserver.dto.CommunityRequest;
 import com.project.flowfinserver.dto.CommunityResponse;
 import com.project.flowfinserver.dto.LikeResponse;
+import com.project.flowfinserver.dto.PortfolioShareRequest;
 import com.project.flowfinserver.service.CommunityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,30 +34,42 @@ public class CommunityController {
     @PostMapping
     public ResponseEntity<CommunityResponse> createPost(
             @RequestBody CommunityRequest request,
-            @RequestHeader("Authorization") String token) {
-        return ResponseEntity.ok(communityService.createPost(request, token));
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(communityService.createPost(request, userId));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<CommunityResponse> updatePost(
             @PathVariable Long id,
             @RequestBody CommunityRequest request,
-            @RequestHeader("Authorization") String token) {
-        return ResponseEntity.ok(communityService.updatePost(id, request, token));
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(communityService.updatePost(id, request, userId));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletePost(
             @PathVariable Long id,
-            @RequestHeader("Authorization") String token) {
-        communityService.deletePost(id, token);
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        communityService.deletePost(id, userId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/like/{id}")
     public ResponseEntity<LikeResponse> toggleLike(
             @PathVariable Long id,
-            @RequestHeader("Authorization") String token) {
-        return ResponseEntity.ok(communityService.toggleLike(id, token));
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(communityService.toggleLike(id, userId));
+    }
+
+    @PostMapping("/portfolio")
+    public ResponseEntity<CommunityResponse> sharePortfolio(
+            @RequestBody PortfolioShareRequest request,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(communityService.sharePortfolio(request, userId));
     }
 }

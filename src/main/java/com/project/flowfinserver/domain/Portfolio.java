@@ -31,9 +31,6 @@ public class Portfolio {
     @Column(name = "investable_amount")
     private Long investableAmount;
 
-    @Column(name = "portfolio_risk_type", length = 20)
-    private String portfolioRiskType;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "recommended_assets", columnDefinition = "JSON")
     private RecommendedAssetsVo recommendedAssets;
@@ -49,6 +46,10 @@ public class Portfolio {
 
     @Column(name = "failed_reason")
     private String failedReason;
+  
+    @Column(name = "portfolio_risk_type", length = 50)
+    private String portfolioRiskType;
+
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

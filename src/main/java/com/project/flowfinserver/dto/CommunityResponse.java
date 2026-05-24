@@ -13,17 +13,19 @@ public class CommunityResponse {
     private final String title;
     private final String content;
     private final Long userId;
+    private final String author;
     private final String category;
     private final int views;
     private final int likeCount;
     private final String createdAt;
     private final List<CommentResponse> comments;
 
-    public CommunityResponse(Community community) {
+    public CommunityResponse(Community community, String authorName) {
         this.id = community.getId();
         this.title = community.getTitle();
         this.content = community.getContent();
         this.userId = community.getUserId();
+        this.author = authorName;
         this.category = community.getCategory();
         this.views = community.getViews();
         this.likeCount = community.getLikeCount();

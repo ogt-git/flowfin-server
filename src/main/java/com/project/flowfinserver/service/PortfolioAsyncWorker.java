@@ -87,9 +87,9 @@ public class PortfolioAsyncWorker {
                 .stream().map(c -> c.getId()).toList();
 
         List<Expense> fixedExpenses = fixedIds.isEmpty() ? List.of() :
-                expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfter(userId, fixedIds, threeMonthsAgo);
+                expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(userId, fixedIds, threeMonthsAgo);
         List<Expense> variableExpenses = variableIds.isEmpty() ? List.of() :
-                expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfter(userId, variableIds, threeMonthsAgo);
+                expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(userId, variableIds, threeMonthsAgo);
 
         long fixedTotal = fixedExpenses.stream().mapToLong(e -> e.getAmount()).sum();
         long variableTotal = variableExpenses.stream().mapToLong(e -> e.getAmount()).sum();

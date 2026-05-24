@@ -48,6 +48,9 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     // AssetService.computeFixedMonthlyAvg — category.id IN (:ids) AND expenseDate > :after
     List<Expense> findByUserIdAndCategoryIdInAndExpenseDateAfter(Long userId, List<Long> categoryIds, LocalDateTime after);
 
+    // 제외 처리된 지출을 빼고 조회 — computeFixedCost·buildSpendingSummary 전용
+    List<Expense> findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(Long userId, List<Long> categoryIds, LocalDateTime after);
+
     // "검토 필요" 배너: confidence < 60, 사용자 미수정, 미제외 건수
     @Query("SELECT COUNT(e) FROM Expense e " +
             "WHERE e.userId = :userId " +

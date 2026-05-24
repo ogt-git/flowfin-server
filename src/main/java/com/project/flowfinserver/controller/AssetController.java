@@ -41,7 +41,7 @@ public class AssetController {
         return ResponseEntity.ok(ApiResponse.success(assetService.getAssetSummary(userId)));
     }
 
-    @Operation(summary = "수동 자산 입력", description = "예금·적금·부동산·현금·기타 자산을 직접 입력합니다. 유동 자산(예금·적금·현금)은 투자 가능 금액에 반영됩니다.")
+    @Operation(summary = "수동 자산 입력", description = "예금·적금·부동산·현금·연금·기타 자산을 직접 입력합니다. 유동 자산(예금·현금)은 투자 가능 금액에 반영됩니다.")
     @PostMapping("/assets/manual")
     public ResponseEntity<ApiResponse<ManualAssetResponse>> saveManualAsset(
             Authentication authentication,

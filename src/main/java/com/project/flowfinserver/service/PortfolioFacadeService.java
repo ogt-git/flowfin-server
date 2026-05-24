@@ -57,12 +57,9 @@ public class PortfolioFacadeService {
 
     @Transactional
     public PortfolioRecommendResult requestRecommend(Long userId) {
-        // 1. risk_type 검사
+        // 1. User 조회 — riskType은 회원가입 시 저장된 값 사용
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
-        if (user.getRiskType() == null || user.getRiskType().isBlank()) {
-            throw new IllegalStateException("투자 성향 설정이 필요합니다. /api/users/tendency를 먼저 호출하세요.");
-        }
 
         // 2. 자산 연동 검사 — 미연동 시 즉시 반환 (PENDING 생성·GPT 호출 없음)
         InvestableAmountResult investable = assetService.calculateInvestableAmount(userId);

@@ -337,11 +337,11 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('60계치킨',        5, 'EXACT',   100),
 ('깐부치킨',        5, 'EXACT',   100),
 -- 편의점
-('GS25',            5, 'EXACT',   100),
-('CU',              5, 'EXACT',   100),
-('세븐일레븐',      5, 'EXACT',   100),
-('이마트24',        5, 'EXACT',   100),
-('미니스톱',        5, 'EXACT',   100),
+('GS25',            5, 'CONTAINS',   95),
+('CU',              5, 'CONTAINS',   95),
+('세븐일레븐',      5, 'CONTAINS',   95),
+('이마트24',        5, 'CONTAINS',   95),
+('미니스톱',        5, 'CONTAINS',   95),
 ('편의점',        5, 'CONTAINS',   90),
 -- 외식 프랜차이즈
 ('본죽',            5, 'EXACT',   100),
@@ -389,6 +389,10 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('올리브영',        6, 'EXACT',   100),
 ('랄라블라',        6, 'EXACT',   100),
 ('롭스',            6, 'EXACT',   100),
+('무인양품',          6, 'CONTAINS',   90),
+('다이소',          6, 'CONTAINS',   90),
+('올리브영',        6, 'CONTAINS',   90),
+
 -- 신선식품·이커머스 (생활용품 포함)
 ('마켓컬리',        6, 'EXACT',   100),
 ('오아시스마켓',    6, 'EXACT',   100),
@@ -430,6 +434,8 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('코레일',          7, 'EXACT',   100),
 ('SRT',             7, 'EXACT',   100),
 ('KTX',             7, 'CONTAINS', 95),
+('패스카드',          7, 'CONTAINS', 90),
+('기후동행',         7, 'CONTAINS', 90),
 ('코버스',          7, 'EXACT',   100),
 ('이티켓',          7, 'EXACT',   100),
 ('고속버스',        7, 'CONTAINS', 90),

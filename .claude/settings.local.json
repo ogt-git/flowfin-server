@@ -74,7 +74,10 @@
       "Bash(findstr :8080)",
       "Bash(git ls-tree *)",
       "Bash(git log *)",
-      "Bash(grep -E \"\\\\.\\(java|kt\\)$\")"
+      "Bash(grep -E \"\\\\.\\(java|kt\\)$\")",
+      "Bash(grep -i \"springdoc\\\\|openapi\" build.gradle)",
+      "Bash(grep -i \"springdoc\\\\|openapi\" pom.xml)",
+      "Bash(grep -E \"\\\\\\\\.java$\")"
     ]
   }
 }

@@ -1,4 +1,4 @@
-ㅇ# CLAUDE.md — FlowFin 개발 지침서
+# CLAUDE.md — FlowFin 개발 지침서
 
 > 이 파일은 Claude가 FlowFin 프로젝트의 코드를 작성할 때 반드시 준수해야 할 규칙과 컨텍스트를 정의한다.
 > 모르는 부분은 추측하지 말고 반드시 질문으로 되물어라.

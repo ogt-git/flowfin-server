@@ -14,4 +14,6 @@ public interface ManualAssetRepository extends JpaRepository<ManualAsset, Long> 
     List<ManualAsset> findByUserIdAndAssetTypeIn(Long userId, List<ManualAssetType> types);
 
     Optional<ManualAsset> findByIdAndUserId(Long id, Long userId);
+
+    void deleteAllByUserId(Long userId);
 }

@@ -14,4 +14,6 @@ public interface PortfolioRepository extends JpaRepository<Portfolio, Integer> {
     Optional<Portfolio> findTopByUserIdAndStatusOrderByCreatedAtDesc(Long userId, PortfolioStatus status);
 
     List<Portfolio> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    void deleteAllByUserId(Long userId);
 }

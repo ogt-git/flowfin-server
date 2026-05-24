@@ -20,4 +20,6 @@ public interface CodefConnectedAccountRepository extends JpaRepository<CodefConn
     boolean existsByUserIdAndOrganizationCodeAndAccountType(Long userId, String organizationCode, AccountType accountType);
 
     Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountType(Long userId, String organizationCode, AccountType accountType);
+
+    void deleteAllByUserId(Long userId);
 }

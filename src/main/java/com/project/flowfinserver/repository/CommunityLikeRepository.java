@@ -14,4 +14,10 @@ public interface CommunityLikeRepository extends JpaRepository<CommunityLike, Lo
     @Modifying
     @Query("DELETE FROM CommunityLike cl WHERE cl.communityId = :communityId")
     void deleteAllByCommunityId(@Param("communityId") Long communityId);
+
+    void deleteAllByUserId(Long userId);
+
+    @Modifying
+    @Query("DELETE FROM CommunityLike cl WHERE cl.communityId IN (SELECT c.id FROM Community c WHERE c.userId = :userId)")
+    void deleteAllByCommunityOwnerId(@Param("userId") Long userId);
 }

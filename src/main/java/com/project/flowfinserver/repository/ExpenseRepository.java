@@ -67,4 +67,6 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
             "AND e.isExcluded = false")
     long countNewExpensesSince(@Param("userId") Long userId,
                                @Param("startOfDay") LocalDateTime startOfDay);
+
+    void deleteAllByUserId(Long userId);
 }

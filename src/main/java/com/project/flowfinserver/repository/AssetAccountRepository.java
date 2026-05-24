@@ -13,4 +13,6 @@ public interface AssetAccountRepository extends JpaRepository<AssetAccount, Inte
     Optional<AssetAccount> findByUserIdAndBrokerCode(Long userId, String brokerCode);
 
     List<AssetAccount> findAllByUserId(Long userId);
+
+    void deleteAllByUserId(Long userId);
 }

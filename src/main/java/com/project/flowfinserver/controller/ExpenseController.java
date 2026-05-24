@@ -32,8 +32,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ExpenseController {
 
-    private static final Pattern MONTH_PATTERN = Pattern.compile("^\\d{6}$");
-    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final Pattern MONTH_PATTERN = Pattern.compile("^\\d{4}-\\d{2}$");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseService expenseService;
     private final ExpenseQueryService expenseQueryService;
@@ -85,11 +85,11 @@ public class ExpenseController {
 
         if (startDate != null && !MONTH_PATTERN.matcher(startDate).matches()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("startDate 형식은 YYYYMM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+                    .body(ApiResponse.error("startDate 형식은 YYYY-MM 이어야 합니다.", "INVALID_DATE_FORMAT"));
         }
         if (endDate != null && !MONTH_PATTERN.matcher(endDate).matches()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("endDate 형식은 YYYYMM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+                    .body(ApiResponse.error("endDate 형식은 YYYY-MM 이어야 합니다.", "INVALID_DATE_FORMAT"));
         }
 
         if (categoryId != null && (categoryId < 1 || categoryId > 11)) {

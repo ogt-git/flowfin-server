@@ -49,7 +49,7 @@ public class CodefController {
                           "인증서 방식(loginType=0)은 .der / .key 파일을 multipart/form-data로 전송합니다.")
     @PostMapping(value = "/connect", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<String>> connectAccount(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
+            Authentication authentication,
             @RequestParam("organization") String organization,
             @RequestParam("businessType") String businessType,
             @RequestParam("loginType") String loginType,
@@ -69,6 +69,7 @@ public class CodefController {
         request.setBirthDate(birthDate);
         request.setAccountNumber(accountNumber);
 
+        Long userId = (Long) authentication.getPrincipal();
         if ("0".equals(loginType)) {
             codefService.attachCertFiles(request, derFile, keyFile);
         }
@@ -80,16 +81,17 @@ public class CodefController {
     @Operation(summary = "연동 해지", description = "연동된 카드/증권 계정을 해지합니다.")
     @DeleteMapping("/connect/{id}")
     public ResponseEntity<ApiResponse<Void>> disconnectAccount(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
+            Authentication authentication,
             @PathVariable Long id) throws Exception {
+        Long userId = (Long) authentication.getPrincipal();
         codefService.disconnect(userId, id);
         return ResponseEntity.ok(ApiResponse.success(null, "연동이 해지되었습니다."));
     }
 
     @Operation(summary = "카드 내역 수동 새로고침", description = "카드 청구 내역을 즉시 동기화합니다. 5분에 한 번만 가능합니다.")
     @PostMapping("/sync/card")
-    public ResponseEntity<ApiResponse<CodefSyncResultDto>> manualSyncCard(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+    public ResponseEntity<ApiResponse<CodefSyncResultDto>> manualSyncCard(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         try {
             CodefSyncResultDto result = codefSyncService.manualSyncCard(userId);
             if (!result.getFailedAccounts().isEmpty()) {
@@ -106,8 +108,8 @@ public class CodefController {
 
     @Operation(summary = "증권 자산 수동 새로고침", description = "증권 종합자산을 즉시 동기화합니다. 5분에 한 번만 가능합니다.")
     @PostMapping("/sync/stock")
-    public ResponseEntity<ApiResponse<CodefSyncResultDto>> manualSyncStock(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+    public ResponseEntity<ApiResponse<CodefSyncResultDto>> manualSyncStock(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         try {
             CodefSyncResultDto result = codefSyncService.manualSyncStock(userId);
             if (!result.getFailedAccounts().isEmpty()) {
@@ -125,8 +127,9 @@ public class CodefController {
     @Operation(summary = "카드 청구 내역 수집 (내부 전용)", description = "CODEF API로 카드 청구 내역을 조회하고 Expense DB에 저장합니다.")
     @PostMapping("/card")
     public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncCard(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
+            Authentication authentication,
             @Valid @RequestBody CodefCardRequest request) throws Exception {
+        Long userId = (Long) authentication.getPrincipal();
         String rawResponse = codefService.getCardBillingList(request);
         CodefSyncResultDto result = codefSyncService.saveFromRawResponse(
                 userId, request.getConnectedId(), request.getOrganization(), rawResponse);
@@ -137,8 +140,9 @@ public class CodefController {
     @Operation(summary = "증권 종합자산 수집 (내부 전용)", description = "CODEF API로부터 증권 종합자산을 조회하고 Asset_Account/Asset_Item에 저장합니다.")
     @PostMapping("/stock")
     public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncStock(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
+            Authentication authentication,
             @Valid @RequestBody CodefStockRequest request) throws Exception {
+        Long userId = (Long) authentication.getPrincipal();
         String rawResponse = codefService.getStockAssets(request);
         CodefSyncResultDto result = codefSyncService.saveStockFromRawResponse(
                 userId, request.getOrganization(), rawResponse);

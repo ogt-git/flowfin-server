@@ -14,19 +14,22 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
     // 카테고리별 지출 합계 — 지출이 있는 카테고리만 반환 (amount=0 카테고리는 서비스에서 채움)
     // 반환: Object[]{ categoryId(Long), totalAmount(Long) }
     // JOIN e.category c → PENDING(category=null) 건 자동 제외
-    @Query("SELECT c.id, SUM(e.amount) " + // CHANGED
+    // amount > 0: 취소·환불(음수) 거래를 제외해 파이차트 카테고리 합계 왜곡 방지
+    @Query("SELECT c.id, SUM(e.amount) " +
            "FROM Expense e " +
-           "JOIN e.category c " + // CHANGED
+           "JOIN e.category c " +
            "WHERE e.userId = :userId " +
            "AND e.isExcluded = false " +
+           "AND e.amount > 0 " +
            "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y%m') = :month " +
-           "GROUP BY c.id") // CHANGED
+           "GROUP BY c.id")
     List<Object[]> findCategoryStatsByUserIdAndMonth(
             @Param("userId") Long userId,
             @Param("month") String month);
 
     // 월 합계 — 당월·전월 모두 이 메서드 재사용
     // COALESCE로 데이터 없을 때 0 반환 보장
+    // 순지출 의도 — amount 필터 의도적 미적용: 취소·환불(음수)이 총액에서 차감되어야 정확한 순지출이 됨
     @Query("SELECT COALESCE(SUM(e.amount), 0) " +
            "FROM Expense e " +
            "WHERE e.userId = :userId " +

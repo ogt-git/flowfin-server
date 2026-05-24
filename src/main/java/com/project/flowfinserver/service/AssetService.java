@@ -255,7 +255,7 @@ public class AssetService {
         }
 
         var fixedExpenses = expenseRepository
-                .findByUserIdAndCategoryIdInAndExpenseDateAfter(userId, fixedCategoryIds, threeMonthsAgo);
+                .findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(userId, fixedCategoryIds, threeMonthsAgo);
         if (fixedExpenses.isEmpty()) {
             return new FixedCostResult(0L, true);
         }

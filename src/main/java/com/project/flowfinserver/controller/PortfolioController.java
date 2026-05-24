@@ -6,14 +6,13 @@ import com.project.flowfinserver.dto.portfolio.PortfolioRecommendResult;
 import com.project.flowfinserver.dto.portfolio.PortfolioStatusResponse;
 import com.project.flowfinserver.service.PortfolioFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,8 +39,8 @@ public class PortfolioController {
                     """
     )
     @PostMapping("/recommend")
-    public ResponseEntity<ApiResponse<?>> recommend(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+    public ResponseEntity<ApiResponse<?>> recommend(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
 
         PortfolioRecommendResult result = portfolioFacadeService.requestRecommend(userId);
 
@@ -71,8 +70,8 @@ public class PortfolioController {
                     """
     )
     @GetMapping
-    public ResponseEntity<ApiResponse<PortfolioStatusResponse>> getLatest(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+    public ResponseEntity<ApiResponse<PortfolioStatusResponse>> getLatest(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         PortfolioStatusResponse response = portfolioFacadeService.getLatestPortfolio(userId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -82,8 +81,8 @@ public class PortfolioController {
             description = "사용자의 포트폴리오 추천 이력을 최신순으로 반환합니다. (마이페이지용)"
     )
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse<List<PortfolioHistoryResponse>>> getHistory(
-            @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId) {
+    public ResponseEntity<ApiResponse<List<PortfolioHistoryResponse>>> getHistory(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         List<PortfolioHistoryResponse> history = portfolioFacadeService.getPortfolioHistory(userId);
         return ResponseEntity.ok(ApiResponse.success(history));
     }

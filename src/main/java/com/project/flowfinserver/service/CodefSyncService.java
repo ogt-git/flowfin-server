@@ -505,7 +505,7 @@ public class CodefSyncService {
         for (JsonNode tx : txArray) {
             String dateStr   = firstNonEmpty(tx, "resUsedDate");
             String merchant  = firstNonEmpty(tx, "resMemberStoreName");
-            String amountStr = firstNonEmpty(tx, "resUsedAmount", "resPaymentAmt", "resPaymentPrincipal")
+            String amountStr = firstNonEmpty(tx, "resUsedAmount", "resPaymentPrincipal", "resPaymentAmt")
                     .replaceAll("[^0-9\\-]", "");
 
             if (dateStr.isEmpty() || merchant.isEmpty() || amountStr.isEmpty()) continue;

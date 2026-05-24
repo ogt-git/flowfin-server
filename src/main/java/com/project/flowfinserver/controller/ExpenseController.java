@@ -14,7 +14,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -67,11 +66,11 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환.")
+    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. startDate/endDate는 YYYYMM 형식.")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyyMMdd") LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyyMMdd") LocalDate endDate,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
             @RequestParam(required = false) Integer categoryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -79,13 +78,26 @@ public class ExpenseController {
 
         Long userId = (Long) authentication.getPrincipal();
 
+        if (startDate != null && !MONTH_PATTERN.matcher(startDate).matches()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("startDate 형식은 YYYYMM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+        }
+        if (endDate != null && !MONTH_PATTERN.matcher(endDate).matches()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("endDate 형식은 YYYYMM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+        }
+
         if (categoryId != null && (categoryId < 1 || categoryId > 11)) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("카테고리 ID는 1~11 사이여야 합니다.", "INVALID_CATEGORY_ID"));
         }
 
-        LocalDate start = startDate != null ? startDate : LocalDate.now().withDayOfMonth(1);
-        LocalDate end   = endDate   != null ? endDate   : LocalDate.now();
+        LocalDate start = startDate != null
+                ? YearMonth.parse(startDate, MONTH_FMT).atDay(1)
+                : LocalDate.now().withDayOfMonth(1);
+        LocalDate end = endDate != null
+                ? YearMonth.parse(endDate, MONTH_FMT).atEndOfMonth()
+                : LocalDate.now();
 
         PageResponse<ExpenseListItemDto> result = expenseQueryService.getExpenses(
                 userId, start, end, categoryId, PageRequest.of(page, size));

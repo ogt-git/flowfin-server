@@ -29,7 +29,8 @@ public class AuthService {
                 request.getEmail(),
                 emailHash,
                 passwordEncoder.encode(request.getPassword()),
-                request.getName()
+                request.getName(),
+                request.getRiskType()
         );
 
         userRepository.save(user);

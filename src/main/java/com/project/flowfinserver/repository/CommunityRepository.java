@@ -13,4 +13,6 @@ public interface CommunityRepository extends JpaRepository<Community, Long> {
 
     List<Community> findAllByTitleContainingOrContentContainingOrderByCreatedAtDesc(
             String title, String content);
+
+    void deleteAllByUserId(Long userId);
 }

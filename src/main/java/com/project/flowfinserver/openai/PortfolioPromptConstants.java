@@ -13,6 +13,8 @@ public final class PortfolioPromptConstants {
 
             [규칙]
             1. 추천은 risk_type과 investable_amount를 우선 근거로 한다.
+               risk_type 가능한 값: CONSERVATIVE(안정형) | MODERATELY_CONSERVATIVE(안정추구형) |
+               MODERATE(위험중립형) | MODERATELY_AGGRESSIVE(적극투자형) | AGGRESSIVE(공격투자형)
             2. 반드시 제공된 정보만 기반으로 분석한다. 입력에 없는 사실을 지어내지 않는다.
             3. allocation의 asset_class(대분류)는 반드시 아래 8개에서만 선택한다:
                ["국내주식","해외주식","채권","부동산/리츠","원자재","대체투자","현금성자산","기타"]

@@ -48,6 +48,9 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(null, "투자 성향이 변경되었습니다."));
     }
 
+    // riskType 허용값:
+    // CONSERVATIVE(안정형) | MODERATELY_CONSERVATIVE(안정추구형) | MODERATE(위험중립형)
+    // MODERATELY_AGGRESSIVE(적극투자형) | AGGRESSIVE(공격투자형)
     @Operation(summary = "회원 탈퇴", description = "본인 계정을 삭제합니다.")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(

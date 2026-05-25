@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
         name = "expense",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_expense",
-                columnNames = {"user_id", "expense_date", "merchant_name", "amount"}
+                columnNames = {"user_id", "expense_date", "merchant_name", "amount", "used_card"}
         )
 )
 @Getter
@@ -39,6 +39,9 @@ public class Expense {
     @Column(name = "card_company", length = 50)
     private String cardCompany;
 
+    @Column(name = "used_card", length = 50, nullable = false)
+    private String usedCard;
+
     @ManyToOne(fetch = FetchType.LAZY) // CHANGED
     @JoinColumn(name = "category_id")  // CHANGED
     private Category category;
@@ -60,17 +63,18 @@ public class Expense {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public static Expense create(Long userId, String cardCompany, Long amount,
+    public static Expense create(Long userId, String cardCompany, String usedCard, Long amount,
                                  String merchantName, LocalDateTime expenseDate,
-                                 Category category, ClassifiedBy classifiedBy, // CHANGED
+                                 Category category, ClassifiedBy classifiedBy,
                                  Integer categoryConfidence) {
         Expense expense = new Expense();
         expense.userId = userId;
         expense.cardCompany = cardCompany;
+        expense.usedCard = usedCard != null ? usedCard : "";
         expense.amount = amount;
         expense.merchantName = merchantName;
         expense.expenseDate = expenseDate;
-        expense.category = category; // CHANGED
+        expense.category = category;
         expense.classifiedBy = classifiedBy;
         expense.categoryConfidence = categoryConfidence;
         expense.isUserModified = false;

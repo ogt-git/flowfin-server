@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 public record CardBillingDto(
         String cardCompany,
+        String usedCard,  // resUsedCard: 이용카드 식별자 (빈 값 "" 허용, null 금지)
         Long amount,
         String merchantName,
         LocalDateTime expenseDate,

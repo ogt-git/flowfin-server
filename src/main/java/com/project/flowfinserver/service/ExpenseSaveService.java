@@ -54,6 +54,7 @@ public class ExpenseSaveService {
             Expense expense = Expense.create(
                     userId,
                     item.cardCompany(),
+                    item.usedCard(),
                     item.amount(),
                     item.merchantName(),
                     item.expenseDate(),

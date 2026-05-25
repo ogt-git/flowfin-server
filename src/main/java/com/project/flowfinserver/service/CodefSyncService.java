@@ -514,9 +514,10 @@ public class CodefSyncService {
             if (amount == 0) continue;
 
             String paymentType = firstNonEmpty(tx, "resPaymentType");
+            String usedCard = firstNonEmpty(tx, "resUsedCard");
 
             LocalDateTime expenseDate = LocalDate.parse(dateStr, PARSE_FMT).atStartOfDay();
-            items.add(new CardBillingDto(organizationCode, amount, merchant, expenseDate, paymentType));
+            items.add(new CardBillingDto(organizationCode, usedCard, amount, merchant, expenseDate, paymentType));
         }
 
         log.info("[CODEF] 청구 내역 파싱 org={} total={}", organizationCode, items.size());

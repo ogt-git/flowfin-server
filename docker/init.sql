@@ -72,11 +72,12 @@ CREATE TABLE IF NOT EXISTS expense (
     category_id        BIGINT,
     classified_by      VARCHAR(10)  COMMENT 'RULE | AI | USER',
     category_confidence INT,
+    used_card          VARCHAR(50)  NOT NULL DEFAULT '',
     is_user_modified   TINYINT(1)   NOT NULL DEFAULT 0,
     is_excluded        TINYINT(1)   NOT NULL DEFAULT 0,
     created_at         DATETIME     DEFAULT CURRENT_TIMESTAMP,
     expense_type        ENUM('FIXED','VARIABLE','IRREGULAR') DEFAULT 'VARIABLE',
-    UNIQUE KEY uq_expense (user_id, expense_date, merchant_name, amount),
+    UNIQUE KEY uq_expense (user_id, expense_date, merchant_name, amount, used_card),
     FOREIGN KEY (user_id)     REFERENCES users (id),
     FOREIGN KEY (category_id) REFERENCES category (id)
 );

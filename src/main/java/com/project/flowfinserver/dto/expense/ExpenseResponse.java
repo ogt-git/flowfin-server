@@ -14,6 +14,7 @@ public class ExpenseResponse {
     private Long amount;
     private String expenseDate;   // ISO 형식
     private String cardCompany;
+    private String usedCard;
     private boolean isExcluded;
 
     private String classifiedBy;        // "RULE" | "AI" | "USER" | "PENDING"
@@ -31,6 +32,7 @@ public class ExpenseResponse {
                 .amount(expense.getAmount())
                 .expenseDate(expense.getExpenseDate() != null ? expense.getExpenseDate().toString() : null)
                 .cardCompany(expense.getCardCompany())
+                .usedCard(expense.getUsedCard())
                 .isExcluded(expense.isExcluded())
                 .classifiedBy(expense.getClassifiedBy() != null ? expense.getClassifiedBy().name() : null)
                 .categoryConfidence(expense.getCategoryConfidence())

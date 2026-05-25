@@ -1,5 +1,6 @@
 package com.project.flowfinserver.openai;
 
+import com.project.flowfinserver.cache.ExpenseStatsCacheManager;
 import com.project.flowfinserver.domain.Category;
 import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.domain.Expense;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,11 +33,13 @@ public class AiExpenseClassifier {
 
     private static final long FALLBACK_CATEGORY_ID = 11L;
     private static final long CACHE_TTL_DAYS = 7;
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseRepository expenseRepository;
     private final CategoryRepository categoryRepository;
     private final OpenAiClassificationClient openAiClient;
     private final StringRedisTemplate stringRedisTemplate;
+    private final ExpenseStatsCacheManager expenseStatsCacheManager;
 
     @Async("aiClassificationExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -62,6 +66,7 @@ public class AiExpenseClassifier {
             Expense fresh = expenseRepository.findById(expenseId).orElse(null);
             if (fresh == null || fresh.isUserModified()) return;
             fresh.updateCategory(category, ClassifiedBy.AI, confidence);
+            expenseStatsCacheManager.evict(fresh.getUserId(), fresh.getExpenseDate().format(MONTH_FMT));
             log.debug("[AiClassify] 캐시 히트 expenseId={} categoryId={} confidence={}", expenseId, categoryId, confidence);
             return;
         }
@@ -87,6 +92,7 @@ public class AiExpenseClassifier {
         Expense fresh = expenseRepository.findById(expenseId).orElse(null);
         if (fresh == null || fresh.isUserModified()) return;
         fresh.updateCategory(result.getCategory(), result.getClassifiedBy(), result.getConfidence());
+        expenseStatsCacheManager.evict(fresh.getUserId(), fresh.getExpenseDate().format(MONTH_FMT));
 
         log.debug("[AiClassify] 분류 완료 expenseId={} categoryId={} confidence={}",
                 expenseId,
@@ -108,6 +114,7 @@ public class AiExpenseClassifier {
         Expense fresh = expenseRepository.findById(expenseId).orElse(null);
         if (fresh == null || fresh.isUserModified()) return;
         fresh.updateCategory(fallback, ClassifiedBy.AI, 0);
+        expenseStatsCacheManager.evict(fresh.getUserId(), fresh.getExpenseDate().format(MONTH_FMT));
     }
 
     private Category fallbackCategory() {

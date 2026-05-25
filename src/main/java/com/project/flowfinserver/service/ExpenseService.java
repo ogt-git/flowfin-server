@@ -23,7 +23,7 @@ import java.time.format.DateTimeFormatter;
 @Transactional(readOnly = true)
 public class ExpenseService {
 
-    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseRepository expenseRepository;
     private final CategoryRepository categoryRepository;

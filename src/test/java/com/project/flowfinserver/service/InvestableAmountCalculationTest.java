@@ -82,7 +82,7 @@ class InvestableAmountCalculationTest {
         Expense exp1 = mock(Expense.class);
         given(exp1.getAmount()).willReturn(600_000L);
         given(exp1.getExpenseDate()).willReturn(LocalDateTime.now().minusMonths(3).plusDays(1));
-        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfter(anyLong(), anyList(), any()))
+        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
                 .willReturn(List.of(exp1));
 
         InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);
@@ -134,7 +134,7 @@ class InvestableAmountCalculationTest {
         Expense exp = mock(Expense.class);
         given(exp.getAmount()).willReturn(300_000L);
         given(exp.getExpenseDate()).willReturn(LocalDateTime.now().minusDays(15));
-        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfter(anyLong(), anyList(), any()))
+        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
                 .willReturn(List.of(exp));
 
         InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);
@@ -161,7 +161,7 @@ class InvestableAmountCalculationTest {
         given(fixedCat.getId()).willReturn(1L);
         given(categoryRepository.findByType(CategoryType.FIXED)).willReturn(List.of(fixedCat));
 
-        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfter(anyLong(), anyList(), any()))
+        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
                 .willReturn(List.of());
 
         InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);
@@ -207,7 +207,7 @@ class InvestableAmountCalculationTest {
         Expense exp = mock(Expense.class);
         given(exp.getAmount()).willReturn(1_000_000L);
         given(exp.getExpenseDate()).willReturn(LocalDateTime.now().minusDays(10));
-        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfter(anyLong(), anyList(), any()))
+        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
                 .willReturn(List.of(exp));
 
         InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
-// expense:stats:{userId}:{yyyyMM}  TTL: 3600초
+// expense:stats:{userId}:{yyyy-MM}  TTL: 3600초
 // @Cacheable 미사용 — 키 패턴 직접 제어 + evict 호출 시점 명시 필요
 @Slf4j
 @Component

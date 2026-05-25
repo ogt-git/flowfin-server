@@ -28,7 +28,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ExpenseSaveService {
 
-    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseRepository expenseRepository;
     private final ExpenseClassificationService classificationService;

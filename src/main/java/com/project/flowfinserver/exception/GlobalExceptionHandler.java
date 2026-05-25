@@ -96,13 +96,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("[" + e.getCodefCode() + "] " + e.getMessage(), ErrorCode.CODEF_SYNC_FAILED.name()));
     }
 
-    //데이터 중복 방지 핸들러
-    @ExceptionHandler(DuplicateExpenseException.class)
-    public ResponseEntity<ApiResponse<?>> handleDuplicateExpense(DuplicateExpenseException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error(e.getMessage(), ErrorCode.DUPLICATE_EXPENSE.name()));
-    }
-
     // 제외 처리된 지출 카테고리 수정 시도 등 잘못된 상태 전환 → 400
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {

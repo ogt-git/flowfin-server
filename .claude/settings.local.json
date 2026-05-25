@@ -77,7 +77,8 @@
       "Bash(grep -E \"\\\\.\\(java|kt\\)$\")",
       "Bash(grep -i \"springdoc\\\\|openapi\" build.gradle)",
       "Bash(grep -i \"springdoc\\\\|openapi\" pom.xml)",
-      "Bash(grep -E \"\\\\\\\\.java$\")"
+      "Bash(grep -E \"\\\\\\\\.java$\")",
+      "Bash(./gradlew.bat compileJava *)"
     ]
   }
 }

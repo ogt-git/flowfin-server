@@ -51,27 +51,22 @@ public class ExpenseController {
             month = YearMonth.now().format(MONTH_FMT);
         }
 
-        // "202605" → "2026-05" 자동 정규화
-        if (month.matches("\\d{6}")) {
-            month = month.substring(0, 4) + "-" + month.substring(4);
-        }
-
         if (!MONTH_PATTERN.matcher(month).matches()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("month 형식은 YYYYMM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
+                    .body(ApiResponse.error("month 형식은 YYYY-MM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
         }
         try {
             YearMonth.parse(month, MONTH_FMT);
         } catch (DateTimeParseException e) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("month 형식은 YYYYMM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
+                    .body(ApiResponse.error("month 형식은 YYYY-MM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
         }
 
         MonthlyStatsResponse result = expenseStatsService.getMonthlyStats(userId, month);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. startDate/endDate는 YYYYMM 형식.")
+    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. startDate/endDate는 YYYY-MM 형식.")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
             @RequestParam(required = false) String startDate,

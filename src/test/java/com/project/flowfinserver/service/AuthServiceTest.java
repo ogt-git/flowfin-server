@@ -81,7 +81,7 @@ class AuthServiceTest {
     void login_success() {
         LoginRequest request = buildLoginRequest("test@flowfin.test", "raw-password");
 
-        User storedUser = User.create("test@flowfin.test", "hashed-email", "encoded-pw", "홍길동");
+        User storedUser = User.create("test@flowfin.test", "hashed-email", "encoded-pw", "홍길동", null);
         ReflectionTestUtils.setField(storedUser, "id", 1L);
 
         given(encryptionUtil.hash("test@flowfin.test")).willReturn("hashed-email");
@@ -114,7 +114,7 @@ class AuthServiceTest {
     void login_wrongPassword_throwsException() {
         LoginRequest request = buildLoginRequest("test@flowfin.test", "wrong-pw");
 
-        User storedUser = User.create("test@flowfin.test", "hashed-email", "encoded-pw", "홍길동");
+        User storedUser = User.create("test@flowfin.test", "hashed-email", "encoded-pw", "홍길동", null);
         given(encryptionUtil.hash("test@flowfin.test")).willReturn("hashed-email");
         given(userRepository.findByEmailHash("hashed-email")).willReturn(Optional.of(storedUser));
         given(passwordEncoder.matches("wrong-pw", "encoded-pw")).willReturn(false);

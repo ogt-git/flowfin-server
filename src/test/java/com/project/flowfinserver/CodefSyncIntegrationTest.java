@@ -87,7 +87,7 @@ class CodefSyncIntegrationTest {
     void setUp() {
         String emailHash = Integer.toHexString("integration-test@flowfin.test".hashCode());
         User testUser = userRepository.save(
-                User.create("integration-test@flowfin.test", emailHash, "pw-hash", "테스트유저"));
+                User.create("integration-test@flowfin.test", emailHash, "pw-hash", "테스트유저", null));
         testUserId = testUser.getId();
 
         if (categoryRepository.findByName("기타지출").isEmpty()) {

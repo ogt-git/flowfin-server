@@ -3,6 +3,7 @@ package com.project.flowfinserver.expense.classification;
 // 테스트 대상: AiExpenseClassifier.classifyAndUpdate(Long expenseId)
 // — 캐시 히트·미스, isUserModified 보호, 신뢰도·범위 fallback, 재시도 실패 처리
 
+import com.project.flowfinserver.cache.ExpenseStatsCacheManager;
 import com.project.flowfinserver.domain.Category;
 import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.domain.Expense;
@@ -42,6 +43,7 @@ class AiExpenseClassifierTest {
     @Mock OpenAiClassificationClient openAiClient;
     @Mock StringRedisTemplate stringRedisTemplate;
     @Mock ValueOperations<String, String> valueOps;
+    @Mock ExpenseStatsCacheManager expenseStatsCacheManager;
 
     @InjectMocks
     AiExpenseClassifier classifier;

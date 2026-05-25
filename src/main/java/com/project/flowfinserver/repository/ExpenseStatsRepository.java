@@ -21,7 +21,7 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
            "WHERE e.userId = :userId " +
            "AND e.isExcluded = false " +
            "AND e.amount > 0 " +
-           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y%m') = :month " +
+           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y-%m') = :month " +
            "GROUP BY c.id")
     List<Object[]> findCategoryStatsByUserIdAndMonth(
             @Param("userId") Long userId,
@@ -34,7 +34,7 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
            "FROM Expense e " +
            "WHERE e.userId = :userId " +
            "AND e.isExcluded = false " +
-           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y%m') = :month")
+           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y-%m') = :month")
     Long findTotalAmountByUserIdAndMonth(
             @Param("userId") Long userId,
             @Param("month") String month);

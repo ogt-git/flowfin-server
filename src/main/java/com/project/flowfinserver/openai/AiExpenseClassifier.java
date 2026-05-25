@@ -33,7 +33,7 @@ public class AiExpenseClassifier {
 
     private static final long FALLBACK_CATEGORY_ID = 11L;
     private static final long CACHE_TTL_DAYS = 7;
-    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseRepository expenseRepository;
     private final CategoryRepository categoryRepository;

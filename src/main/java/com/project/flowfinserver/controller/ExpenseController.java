@@ -32,8 +32,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ExpenseController {
 
-    private static final Pattern MONTH_PATTERN = Pattern.compile("^\\d{6}$");
-    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final Pattern MONTH_PATTERN = Pattern.compile("^\\d{4}-\\d{2}$");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final ExpenseService expenseService;
     private final ExpenseQueryService expenseQueryService;
@@ -53,20 +53,20 @@ public class ExpenseController {
 
         if (!MONTH_PATTERN.matcher(month).matches()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("month 형식은 YYYYMM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
+                    .body(ApiResponse.error("month 형식은 YYYY-MM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
         }
         try {
             YearMonth.parse(month, MONTH_FMT);
         } catch (DateTimeParseException e) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("month 형식은 YYYYMM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
+                    .body(ApiResponse.error("month 형식은 YYYY-MM 이어야 합니다.", "INVALID_MONTH_FORMAT"));
         }
 
         MonthlyStatsResponse result = expenseStatsService.getMonthlyStats(userId, month);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. startDate/endDate는 YYYYMM 형식.")
+    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. startDate/endDate는 YYYY-MM 형식.")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
             @RequestParam(required = false) String startDate,
@@ -80,11 +80,11 @@ public class ExpenseController {
 
         if (startDate != null && !MONTH_PATTERN.matcher(startDate).matches()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("startDate 형식은 YYYYMM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+                    .body(ApiResponse.error("startDate 형식은 YYYY-MM 이어야 합니다.", "INVALID_DATE_FORMAT"));
         }
         if (endDate != null && !MONTH_PATTERN.matcher(endDate).matches()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("endDate 형식은 YYYYMM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+                    .body(ApiResponse.error("endDate 형식은 YYYY-MM 이어야 합니다.", "INVALID_DATE_FORMAT"));
         }
 
         if (categoryId != null && (categoryId < 1 || categoryId > 11)) {

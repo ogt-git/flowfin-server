@@ -1,5 +1,6 @@
 package com.project.flowfinserver.repository;
 
+import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.domain.Expense;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -14,13 +15,12 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
     // 카테고리별 지출 합계 — 지출이 있는 카테고리만 반환 (amount=0 카테고리는 서비스에서 채움)
     // 반환: Object[]{ categoryId(Long), totalAmount(Long) }
     // JOIN e.category c → PENDING(category=null) 건 자동 제외
-    // amount > 0: 취소·환불(음수) 거래를 제외해 파이차트 카테고리 합계 왜곡 방지
+    // 취소·환불(음수)도 포함하여 카테고리별 순지출 반영
     @Query("SELECT c.id, SUM(e.amount) " +
            "FROM Expense e " +
            "JOIN e.category c " +
            "WHERE e.userId = :userId " +
            "AND e.isExcluded = false " +
-           "AND e.amount > 0 " +
            "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y-%m') = :month " +
            "GROUP BY c.id")
     List<Object[]> findCategoryStatsByUserIdAndMonth(
@@ -38,4 +38,16 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
     Long findTotalAmountByUserIdAndMonth(
             @Param("userId") Long userId,
             @Param("month") String month);
+
+    // AI 분류 대기 건수 — 0보다 크면 stats가 아직 incomplete 상태
+    @Query("SELECT COUNT(e) " +
+           "FROM Expense e " +
+           "WHERE e.userId = :userId " +
+           "AND e.isExcluded = false " +
+           "AND e.classifiedBy = :pending " +
+           "AND FUNCTION('DATE_FORMAT', e.expenseDate, '%Y-%m') = :month")
+    long countPendingByUserIdAndMonth(
+            @Param("userId") Long userId,
+            @Param("month") String month,
+            @Param("pending") ClassifiedBy pending);
 }

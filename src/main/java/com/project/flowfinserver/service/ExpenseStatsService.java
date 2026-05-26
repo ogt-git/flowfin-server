@@ -4,6 +4,7 @@ import com.project.flowfinserver.cache.ExpenseStatsCacheManager;
 import com.project.flowfinserver.constant.CategoryMetaConstants;
 import com.project.flowfinserver.constant.CategoryMetaConstants.CategoryMeta;
 import com.project.flowfinserver.domain.CategoryType;
+import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.dto.expense.CategoryStatDto;
 import com.project.flowfinserver.dto.expense.MonthlyStatsResponse;
 import com.project.flowfinserver.repository.ExpenseStatsRepository;
@@ -30,11 +31,17 @@ public class ExpenseStatsService {
 
     public MonthlyStatsResponse getMonthlyStats(Long userId, String month) {
 
-        // 1. Redis 캐시 조회
-        MonthlyStatsResponse cached = cacheManager.get(userId, month);
-        if (cached != null) return cached;
+        // 1. PENDING 건 존재 여부 — 분류 중이면 캐시 조회 스킵 (불완전한 결과를 캐싱하면 안 됨)
+        boolean classifying = expenseStatsRepository
+                .countPendingByUserIdAndMonth(userId, month, ClassifiedBy.PENDING) > 0;
 
-        // 2. 카테고리별 집계 (지출 있는 카테고리만 — amount=0 건은 아래에서 채움)
+        // 2. Redis 캐시 조회 (분류 완료 상태에서만)
+        if (!classifying) {
+            MonthlyStatsResponse cached = cacheManager.get(userId, month);
+            if (cached != null) return cached;
+        }
+
+        // 3. 카테고리별 집계 (지출 있는 카테고리만 — amount=0 건은 아래에서 채움)
         List<Object[]> rows = expenseStatsRepository.findCategoryStatsByUserIdAndMonth(userId, month);
         Map<Long, Long> amountByCategory = new HashMap<>();
         for (Object[] row : rows) {
@@ -44,11 +51,11 @@ public class ExpenseStatsService {
             amountByCategory.put(catId, amt);
         }
 
-        // 3. 당월 합계
+        // 4. 당월 합계
         Long totalRaw = expenseStatsRepository.findTotalAmountByUserIdAndMonth(userId, month);
         long totalAmount = totalRaw != null ? totalRaw : 0L;
 
-        // 4. 11개 카테고리 전부 포함한 CategoryStatDto 구성 (amount=0 카테고리도 포함)
+        // 5. 11개 카테고리 전부 포함한 CategoryStatDto 구성 (amount=0 카테고리도 포함)
         long fixedAmount = 0L, variableAmount = 0L, etcAmount = 0L;
         List<CategoryStatDto> categoryStats = new ArrayList<>();
 
@@ -66,14 +73,16 @@ public class ExpenseStatsService {
             else                                            etcAmount      += amount;
         }
 
-        // 5. amount DESC 정렬
+        // 6. amount DESC 정렬
         categoryStats.sort(Comparator.comparingLong(CategoryStatDto::amount).reversed());
 
         MonthlyStatsResponse response = new MonthlyStatsResponse(
-                month, totalAmount, fixedAmount, variableAmount, etcAmount, categoryStats);
+                month, totalAmount, fixedAmount, variableAmount, etcAmount, categoryStats, classifying);
 
-        // 8. Redis 저장
-        cacheManager.set(userId, month, response);
+        // 7. 분류 완료 상태에서만 Redis 캐시 저장 (분류 중엔 캐싱 스킵)
+        if (!classifying) {
+            cacheManager.set(userId, month, response);
+        }
         return response;
     }
 

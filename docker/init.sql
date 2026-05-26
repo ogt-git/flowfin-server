@@ -552,6 +552,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('헬스장',          9, 'CONTAINS', 85),
 ('헬스',          9, 'CONTAINS', 85),
 ('휘트니스',          9, 'CONTAINS', 85),
+('스포렉스',          9, 'CONTAINS', 85),
 ('피트니스',        9, 'CONTAINS', 85),
 ('짐',          9, 'CONTAINS', 80),
 ('GYM',          9, 'CONTAINS', 80),

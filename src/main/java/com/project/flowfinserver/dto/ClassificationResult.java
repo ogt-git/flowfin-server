@@ -17,8 +17,8 @@ public class ClassificationResult {
         this.confidence = confidence;
     }
 
-    public static ClassificationResult ofRule(Category category) { // CHANGED
-        return new ClassificationResult(category, ClassifiedBy.RULE, 100);
+    public static ClassificationResult ofRule(Category category, int confidence) {
+        return new ClassificationResult(category, ClassifiedBy.RULE, confidence);
     }
 
     public static ClassificationResult ofAi(Category category, Integer confidence) { // CHANGED

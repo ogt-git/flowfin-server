@@ -57,7 +57,7 @@ class AiExpenseClassifierTest {
 
     @BeforeEach
     void setUp() {
-        pendingExpense = Expense.create(1L, "0301", 6500L, "스타벅스",
+        pendingExpense = Expense.create(1L, "0301", "", 6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0), null, ClassifiedBy.PENDING, null);
 
         cat5 = mock(Category.class);
@@ -75,7 +75,7 @@ class AiExpenseClassifierTest {
     @DisplayName("isUserModified=true인 Expense는 AI 분류를 차단한다")
     void isUserModified_true이면_AI_분류를_차단한다() {
         Category any = mock(Category.class);
-        Expense userModified = Expense.create(1L, "0301", 6500L, "스타벅스",
+        Expense userModified = Expense.create(1L, "0301", "", 6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0), any, ClassifiedBy.RULE, 100);
         userModified.updateCategoryByUser(any);
 
@@ -90,7 +90,7 @@ class AiExpenseClassifierTest {
     @DisplayName("classifiedBy가 PENDING이 아닌 Expense는 AI 분류를 차단한다")
     void classifiedBy가_PENDING_아니면_AI_분류를_차단한다() {
         Category any = mock(Category.class);
-        Expense alreadyClassified = Expense.create(1L, "0301", 6500L, "스타벅스",
+        Expense alreadyClassified = Expense.create(1L, "0301", "", 6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0), any, ClassifiedBy.RULE, 100);
 
         given(expenseRepository.findById(EXPENSE_ID)).willReturn(Optional.of(alreadyClassified));
@@ -140,7 +140,7 @@ class AiExpenseClassifierTest {
     @Test
     @DisplayName("취소거래(음수 amount)는 Math.abs로 양수 변환 후 OpenAI에 전달한다")
     void 취소거래_음수_amount는_양수로_변환해서_전달한다() {
-        Expense cancelExpense = Expense.create(1L, "0301", -6500L, "스타벅스",
+        Expense cancelExpense = Expense.create(1L, "0301", "", -6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0), null, ClassifiedBy.PENDING, null);
 
         given(expenseRepository.findById(EXPENSE_ID))
@@ -188,10 +188,10 @@ class AiExpenseClassifierTest {
     void AI응답_적용_직전_isUserModified_변경_시_UPDATE_차단한다() {
         Category any = mock(Category.class);
         // 첫 조회: PENDING (AI 분류 진행)
-        Expense firstLoad = Expense.create(1L, "0301", 6500L, "스타벅스",
+        Expense firstLoad = Expense.create(1L, "0301", "", 6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0), null, ClassifiedBy.PENDING, null);
         // 두 번째 조회: 사용자가 그 사이 수정 → isUserModified=true
-        Expense secondLoad = Expense.create(1L, "0301", 6500L, "스타벅스",
+        Expense secondLoad = Expense.create(1L, "0301", "", 6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0), any, ClassifiedBy.RULE, 100);
         secondLoad.updateCategoryByUser(any);
 

@@ -3,6 +3,7 @@ package com.project.flowfinserver.dto.portfolio;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.project.flowfinserver.domain.Portfolio;
 import com.project.flowfinserver.domain.PortfolioStatus;
+import com.project.flowfinserver.domain.RiskType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -10,7 +11,7 @@ import java.util.List;
 public record PortfolioHistoryResponse(
         @JsonProperty("portfolio_id") Long portfolioId,
         PortfolioStatus status,
-        @JsonProperty("portfolio_risk_type") String portfolioRiskType,
+        @JsonProperty("portfolio_risk_type") RiskType portfolioRiskType,
         @JsonProperty("investable_amount") Long investableAmount,
         List<PortfolioAllocationResponse> allocation,
         String summary,

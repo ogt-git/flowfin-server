@@ -1,5 +1,6 @@
 package com.project.flowfinserver.dto;
 
+import com.project.flowfinserver.domain.RiskType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -11,5 +12,5 @@ public class LoginResponse {
     private String refreshToken;
     private String name;
     private String email;
-    private String riskType;
+    private RiskType riskType;
 }

@@ -44,14 +44,15 @@ public class User {
     @Column(name = "token_expired_at")
     private LocalDateTime tokenExpiredAt;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "risk_type", length = 50)
-    private String riskType;
+    private RiskType riskType;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public static User create(String email, String emailHash, String password, String name, String riskType) {
+    public static User create(String email, String emailHash, String password, String name, RiskType riskType) {
         User user = new User();
         user.email = email;
         user.emailHash = emailHash;
@@ -61,13 +62,13 @@ public class User {
         return user;
     }
 
-    public void updateRiskType(String riskType) {
+    public void updateRiskType(RiskType riskType) {
         this.riskType = riskType;
     }
 
-    public void updateProfile(String name, String riskType) {
+    public void updateProfile(String name, RiskType riskType) {
         if (name != null && !name.isBlank()) this.name = name;
-        if (riskType != null && !riskType.isBlank()) this.riskType = riskType;
+        if (riskType != null) this.riskType = riskType;
     }
 
     public void updatePassword(String encodedPassword) {

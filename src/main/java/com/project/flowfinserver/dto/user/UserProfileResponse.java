@@ -1,6 +1,7 @@
 package com.project.flowfinserver.dto.user;
 
 import com.project.flowfinserver.domain.CodefConnectedAccount;
+import com.project.flowfinserver.domain.RiskType;
 import com.project.flowfinserver.domain.User;
 import com.project.flowfinserver.util.MaskingUtil;
 import lombok.Getter;
@@ -14,7 +15,7 @@ public class UserProfileResponse {
     private final Long id;
     private final String name;
     private final String email;
-    private final String riskType;
+    private final RiskType riskType;
     private final LocalDateTime createdAt;
     private final List<ConnectedAccountInfo> connectedAccounts;
 

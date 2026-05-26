@@ -3,6 +3,7 @@ package com.project.flowfinserver.service;
 import com.project.flowfinserver.domain.AssetClass;
 import com.project.flowfinserver.domain.Portfolio;
 import com.project.flowfinserver.domain.PortfolioStatus;
+import com.project.flowfinserver.domain.RiskType;
 import com.project.flowfinserver.domain.User;
 import com.project.flowfinserver.domain.ZeroReason;
 import com.project.flowfinserver.dto.portfolio.PortfolioAllocationResponse;
@@ -220,8 +221,8 @@ public class PortfolioFacadeService {
      * investableAmount가 바뀌면 캐시 무효화 — 투자 규모 변화가 추천 품질에 직접 영향.
      * currentAllocation은 현재 null 고정(resProductTypeCd 매핑 미확정).
      */
-    private String buildInputHash(String riskType, long investableAmount) {
-        StringBuilder sb = new StringBuilder(riskType)
+    private String buildInputHash(RiskType riskType, long investableAmount) {
+        StringBuilder sb = new StringBuilder(riskType.name())
                 .append("|").append(investableAmount).append("|");
         Arrays.stream(AssetClass.values()).forEach(ac ->
                 sb.append(ac.getDisplayName()).append(":0|"));

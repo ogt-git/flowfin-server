@@ -1,5 +1,6 @@
 package com.project.flowfinserver.dto.user;
 
+import com.project.flowfinserver.domain.RiskType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -7,7 +8,7 @@ import lombok.Setter;
 @Setter
 public class UpdateProfileRequest {
     private String name;
-    private String riskType;
+    private RiskType riskType;
     private String currentPassword;
     private String newPassword;
 }

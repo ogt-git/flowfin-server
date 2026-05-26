@@ -1,6 +1,7 @@
 package com.project.flowfinserver.service;
 
 import com.project.flowfinserver.domain.CodefConnectedAccount;
+import com.project.flowfinserver.domain.RiskType;
 import com.project.flowfinserver.domain.User;
 import com.project.flowfinserver.dto.user.UpdateProfileRequest;
 import com.project.flowfinserver.dto.user.UserProfileResponse;
@@ -63,7 +64,7 @@ public class UserService {
     }
 
     @Transactional
-    public void updateTendency(Long userId, String riskType) {
+    public void updateTendency(Long userId, RiskType riskType) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다."));
         user.updateRiskType(riskType);

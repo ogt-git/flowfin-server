@@ -58,7 +58,8 @@ public class PortfolioAsyncWorker {
             SpendingSummary spendingSummary = buildSpendingSummary(userId);
 
             PortfolioAiInput input = new PortfolioAiInput(
-                    ctx.riskType(), null, snapshotAmount, totalAsset, null, spendingSummary);
+                    ctx.riskType() != null ? ctx.riskType().name() : null,
+                    null, snapshotAmount, totalAsset, null, spendingSummary);
 
             PortfolioRecommendResponse response = portfolioService.recommend(input, investable);
             portfolioService.completePortfolio(portfolioId, response);

@@ -3,6 +3,7 @@ package com.project.flowfinserver.service;
 import com.project.flowfinserver.domain.AssetClass;
 import com.project.flowfinserver.domain.Portfolio;
 import com.project.flowfinserver.domain.RecommendedAssetsVo;
+import com.project.flowfinserver.domain.RiskType;
 import com.project.flowfinserver.domain.ZeroReason;
 import com.project.flowfinserver.dto.portfolio.InvestableAmountResult;
 import com.project.flowfinserver.dto.portfolio.PortfolioAiInput;
@@ -199,12 +200,22 @@ public class PortfolioService {
                 false,
                 investable.zeroReason(),
                 investable.fixedCostMissing(),
-                aiResponse.riskType(),
+                parseRiskType(aiResponse.riskType()),
                 aiResponse.summary(),
                 aiResponse.aiDiagnosis(),
                 allocation,
                 FIXED_DISCLAIMER
         );
+    }
+
+    private RiskType parseRiskType(String value) {
+        if (value == null) return null;
+        try {
+            return RiskType.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            log.warn("[Portfolio] AI 응답의 risk_type 미인식 값: {}", value);
+            return null;
+        }
     }
 
     private PortfolioRecommendResponse buildNeedAssetLinkResponse() {

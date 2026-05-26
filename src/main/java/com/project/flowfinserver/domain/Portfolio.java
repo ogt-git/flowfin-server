@@ -47,8 +47,9 @@ public class Portfolio {
     @Column(name = "failed_reason")
     private String failedReason;
   
+    @Enumerated(EnumType.STRING)
     @Column(name = "portfolio_risk_type", length = 50)
-    private String portfolioRiskType;
+    private RiskType portfolioRiskType;
 
 
     @CreationTimestamp
@@ -59,7 +60,7 @@ public class Portfolio {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public static Portfolio createPending(Long userId, String portfolioRiskType,
+    public static Portfolio createPending(Long userId, RiskType portfolioRiskType,
                                           Long investableAmount, String recommendInputHash) {
         Portfolio portfolio = new Portfolio();
         portfolio.userId = userId;

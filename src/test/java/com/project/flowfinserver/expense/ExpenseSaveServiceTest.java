@@ -60,9 +60,9 @@ class ExpenseSaveServiceTest {
     @BeforeEach
     void setUp() {
         ruleResult = ClassificationResult.ofRule(mock(Category.class));
-        starbucks = new CardBillingDto("0301", 6500L,  "스타벅스",  LocalDateTime.of(2024, 4, 1, 0, 0), "1");
-        coupang   = new CardBillingDto("0301", 35000L, "쿠팡",      LocalDateTime.of(2024, 4, 2, 0, 0), "1");
-        netflix   = new CardBillingDto("0301", 13500L, "넷플릭스",  LocalDateTime.of(2024, 4, 3, 0, 0), "1");
+        starbucks = new CardBillingDto("0301", "", 6500L,  "스타벅스",  LocalDateTime.of(2024, 4, 1, 0, 0), "1");
+        coupang   = new CardBillingDto("0301", "", 35000L, "쿠팡",      LocalDateTime.of(2024, 4, 2, 0, 0), "1");
+        netflix   = new CardBillingDto("0301", "", 13500L, "넷플릭스",  LocalDateTime.of(2024, 4, 3, 0, 0), "1");
     }
 
     // ==================== 정상 저장 ====================
@@ -191,7 +191,7 @@ class ExpenseSaveServiceTest {
     void Rule_분류_실패_시_pendingAiIds에_ID가_포함된다() {
         ClassificationResult pendingResult = ClassificationResult.pending();
         given(classificationService.classify(anyString())).willReturn(pendingResult);
-        Expense savedExpense = Expense.create(USER_ID, "0301", 6500L, "미분류가맹점",
+        Expense savedExpense = Expense.create(USER_ID, "0301", "", 6500L, "미분류가맹점",
                 LocalDateTime.of(2024, 4, 1, 0, 0), null, ClassifiedBy.PENDING, null);
         given(expenseRepository.save(any(Expense.class))).willReturn(savedExpense);
 
@@ -240,7 +240,7 @@ class ExpenseSaveServiceTest {
         Category cat1 = mock(Category.class);
 
         Expense userModifiedExpense = Expense.create(
-                USER_ID, "0301", 6500L, "스타벅스",
+                USER_ID, "0301", "", 6500L, "스타벅스",
                 LocalDateTime.of(2024, 4, 1, 0, 0),
                 cat5, ClassifiedBy.RULE, 100
         );

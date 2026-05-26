@@ -25,7 +25,7 @@ public class ExpenseKeywordClassifier {
 
     private final MerchantCategoryRuleRepository ruleRepository;
 
-    private Map<String, Long> exactRules = new HashMap<>();   // keyword → categoryId (O(1))
+    private Map<String, MerchantCategoryRule> exactRules = new HashMap<>();  // keyword → rule (O(1))
     private List<MerchantCategoryRule> containsRules = new ArrayList<>(); // priority 내림차순
 
     @PostConstruct
@@ -36,18 +36,17 @@ public class ExpenseKeywordClassifier {
     public void reloadRules() {
         List<MerchantCategoryRule> all = ruleRepository.findAllByOrderByPriorityDesc();
 
-        Map<String, Long> newExact = new HashMap<>();
+        Map<String, MerchantCategoryRule> newExact = new HashMap<>();
         List<MerchantCategoryRule> newContains = new ArrayList<>();
 
         for (MerchantCategoryRule rule : all) {
             if (rule.getMatchType() == MatchType.EXACT) {
-                newExact.put(rule.getKeyword(), rule.getCategoryId());
+                newExact.put(rule.getKeyword(), rule);
             } else {
                 newContains.add(rule);
             }
         }
 
-        // 참조 교체 (간단한 가시성 보장 — 고빈도 갱신은 없으므로 충분)
         exactRules = newExact;
         containsRules = newContains;
         log.info("[KeywordClassifier] 규칙 로드 완료 — EXACT={}건 CONTAINS={}건",
@@ -55,20 +54,20 @@ public class ExpenseKeywordClassifier {
     }
 
     /**
-     * 가맹점명을 분류하여 categoryId를 반환한다.
+     * 가맹점명을 분류하여 매칭된 규칙을 반환한다.
      * EXACT 매칭 우선, 없으면 CONTAINS, 모두 없으면 null 반환.
      */
-    public Long classify(String merchantName) {
+    public MerchantCategoryRule classify(String merchantName) {
         if (merchantName == null || merchantName.isBlank()) return null;
 
         // 1단계: EXACT (완전 일치)
-        Long exactMatch = exactRules.get(merchantName);
+        MerchantCategoryRule exactMatch = exactRules.get(merchantName);
         if (exactMatch != null) return exactMatch;
 
         // 2단계: CONTAINS (priority 내림차순으로 이미 정렬됨)
         for (MerchantCategoryRule rule : containsRules) {
             if (merchantName.contains(rule.getKeyword())) {
-                return rule.getCategoryId();
+                return rule;
             }
         }
 

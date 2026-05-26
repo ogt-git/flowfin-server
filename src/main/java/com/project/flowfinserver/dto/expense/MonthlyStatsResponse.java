@@ -8,5 +8,6 @@ public record MonthlyStatsResponse(
         long fixedAmount,
         long variableAmount,
         long etcAmount,
-        List<CategoryStatDto> categoryStats
+        List<CategoryStatDto> categoryStats,
+        boolean classifying
 ) {}

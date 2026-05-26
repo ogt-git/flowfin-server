@@ -45,7 +45,7 @@ class ExpenseServiceTest {
     private static final Long CATEGORY_ID = 5L;
 
     private Expense makeExpense(Long userId) {
-        return Expense.create(userId, "0301", 5000L, "스타벅스",
+        return Expense.create(userId, "0301", "", 5000L, "스타벅스",
                 LocalDateTime.of(2024, 5, 1, 10, 0), null, ClassifiedBy.RULE, 100);
     }
 

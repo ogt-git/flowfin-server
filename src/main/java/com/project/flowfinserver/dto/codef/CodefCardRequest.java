@@ -2,6 +2,7 @@ package com.project.flowfinserver.dto.codef;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -20,9 +21,10 @@ public class CodefCardRequest {
     @NotBlank(message = "기관 코드는 필수입니다.")
     private String organization;      // 카드사 코드 (필수)
 
+    @Pattern(regexp = "^\\d{6}$", message = "조회 시작월은 YYYYMM 6자리여야 합니다")
     private String startDate;         // 청구년월 (YYYYMM), 미입력 시 최근 명세서 조회
-    private String endDate;           // 청구년월 종료 (YYYYMM), 선택
 
+    @Pattern(regexp = "^\\d{8}$", message = "생년월일은 YYYYMMDD 8자리여야 합니다")
     private String birthDate;         // 생년월일 (YYYYMMDD), 일부 기관 필수
 
     // KB카드 카드소지확인 인증용 (필수)

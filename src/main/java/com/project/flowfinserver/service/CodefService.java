@@ -293,7 +293,6 @@ public class CodefService {
                 ? request.getStartDate()
                 : LocalDate.now().minusMonths(3).format(BILLING_DATE_FMT);
         params.put("startDate", startDate);
-        if (hasValue(request.getEndDate()))             params.put("endDate", request.getEndDate());
         if (hasValue(request.getBirthDate()))           params.put("birthDate", request.getBirthDate());
         if (hasValue(request.getInquiryType()))         params.put("inquiryType", request.getInquiryType());
         if (hasValue(request.getMemberStoreInfoType())) params.put("memberStoreInfoType", request.getMemberStoreInfoType());

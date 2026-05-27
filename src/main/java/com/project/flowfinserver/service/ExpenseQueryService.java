@@ -1,5 +1,6 @@
 package com.project.flowfinserver.service;
 
+import com.project.flowfinserver.domain.CategoryType;
 import com.project.flowfinserver.domain.Expense;
 import com.project.flowfinserver.dto.PageResponse;
 import com.project.flowfinserver.dto.expense.ExpenseListItemDto;
@@ -27,6 +28,7 @@ public class ExpenseQueryService {
             LocalDate startDate,
             LocalDate endDate,
             Integer categoryId,
+            CategoryType categoryType,
             Pageable pageable) {
 
         if (startDate.isAfter(endDate)) {
@@ -38,13 +40,14 @@ public class ExpenseQueryService {
         Long categoryIdLong = categoryId != null ? categoryId.longValue() : null;
 
         Page<Expense> expensePage = expenseRepository.findExpenses(
-                userId, start, end, categoryIdLong, pageable);
+                userId, start, end, categoryIdLong, categoryType, pageable);
 
-        // findExpenses에 LEFT JOIN FETCH e.category 포함 — 별도 배치 조회 불필요 // CHANGED
-        List<ExpenseListItemDto> items = expensePage.getContent().stream() // CHANGED
-                .map(e -> ExpenseListItemDto.from(e, e.getCategory())) // CHANGED
+        Long totalAmount = expenseRepository.sumAmounts(userId, start, end, categoryIdLong, categoryType);
+
+        List<ExpenseListItemDto> items = expensePage.getContent().stream()
+                .map(e -> ExpenseListItemDto.from(e, e.getCategory()))
                 .collect(Collectors.toList());
 
-        return PageResponse.of(expensePage, items);
+        return PageResponse.of(expensePage, items, totalAmount);
     }
 }

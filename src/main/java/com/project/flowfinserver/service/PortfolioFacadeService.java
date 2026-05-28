@@ -12,6 +12,7 @@ import com.project.flowfinserver.dto.portfolio.PortfolioRecommendResponse;
 import com.project.flowfinserver.dto.portfolio.PortfolioRecommendResult;
 import com.project.flowfinserver.dto.portfolio.PortfolioStatusResponse;
 import com.project.flowfinserver.dto.portfolio.InvestableAmountResult;
+import com.project.flowfinserver.exception.RiskTypeNotSetException;
 import com.project.flowfinserver.exception.TooManyRequestsException;
 import com.project.flowfinserver.repository.PortfolioRepository;
 import com.project.flowfinserver.repository.UserRepository;
@@ -42,7 +43,7 @@ public class PortfolioFacadeService {
     private static final String FIXED_DISCLAIMER =
             "본 정보는 AI가 작성했으며 투자 조언이 아니라 정보 제공 목적이고, 투자 판단과 책임은 본인에게 있습니다.";
     private static final String LOCK_KEY_PREFIX = "portfolio:lock:";
-    // 최악 실행시간: OpenAI 3회 재시도(187s) × MAX_ATTEMPTS(2) ≈ 374s → 15분으로 충분한 여유 확보
+    // 최악 실행시간: OpenAI 3회 재시도(187s) × MAX_ATTEMPTS(1) ≈ 187s → 10분으로 충분한 여유 확보
     private static final long LOCK_TTL_MINUTES = 10L;
     private static final long COOLDOWN_MINUTES = 5L;
     private static final long CACHE_HOURS = 24L;
@@ -61,6 +62,10 @@ public class PortfolioFacadeService {
         // 1. User 조회 — riskType은 회원가입 시 저장된 값 사용
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+
+        if (user.getRiskType() == null) {
+            throw new RiskTypeNotSetException();
+        }
 
         // 2. 자산 연동 검사 — 미연동 시 즉시 반환 (PENDING 생성·GPT 호출 없음)
         InvestableAmountResult investable = assetService.calculateInvestableAmount(userId);
@@ -111,8 +116,9 @@ public class PortfolioFacadeService {
                     try {
                         portfolioAsyncWorker.executeRecommendation(portfolioId, lockToken);
                     } catch (RuntimeException e) {
-                        // executor 큐 포화(RejectedExecutionException) 등 제출 자체 실패 시 락 즉시 해제
-                        log.error("[Portfolio] 워커 제출 실패 — 락 해제 userId={} portfolioId={}", userId, portfolioId, e);
+                        // executor 큐 포화(RejectedExecutionException) 등 제출 자체 실패 시 FAILED 전환 + 락 해제
+                        log.error("[Portfolio] 워커 제출 실패 — FAILED 전환 userId={} portfolioId={}", userId, portfolioId, e);
+                        portfolioService.failPortfolio(portfolioId, "executor 큐 포화로 추천 처리 불가");
                         deleteLockIfOwner(lockKey, lockToken);
                         throw e;
                     }

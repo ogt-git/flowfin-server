@@ -51,6 +51,7 @@ public class CodefSyncService {
     private static final int LIMITED_CARD_MONTHS = 4;   // BC카드(0305), 수협(0320) 조회 가능 기간 제한
     private static final Set<String> LIMITED_ORG_CARDS = Set.of("0305", "0320");
     private static final String JEJUCARD_ORG = "0321";  // 제주카드: startDate yyyyMMdd 형식 요구
+    private static final long SYNC_LOCK_TTL_SECONDS = 300; // 동기화 락 TTL — 서버 장애 시 자동 해제용
 
     // 2026-05-20 기준 고정 환율: 1 USD = 1,500 KRW
     private static final long USD_TO_KRW_RATE = 1_500L;
@@ -70,10 +71,10 @@ public class CodefSyncService {
     // 카드 수동 새로고침 — Redis 쿨다운 5분 (키: codef:refresh:cooldown:{userId}:CARD)
     public CodefSyncResultDto manualSyncCard(Long userId) {
         String key = "codef:refresh:cooldown:" + userId + ":CARD";
-        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+        Boolean cooldownSet = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 5, TimeUnit.MINUTES);
+        if (Boolean.FALSE.equals(cooldownSet)) {
             throw new TooManyRequestsException("새로고침은 5분에 한 번만 가능합니다.");
         }
-        stringRedisTemplate.opsForValue().set(key, "1", 5, TimeUnit.MINUTES);
         LocalDateTime nextAvailableAt = LocalDateTime.now().plusMinutes(5);
 
         CodefSyncResultDto result;
@@ -98,10 +99,10 @@ public class CodefSyncService {
     // 증권 수동 새로고침 — Redis 쿨다운 5분 (키: codef:refresh:cooldown:{userId}:STOCK)
     public CodefSyncResultDto manualSyncStock(Long userId) {
         String key = "codef:refresh:cooldown:" + userId + ":STOCK";
-        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+        Boolean cooldownSet = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 5, TimeUnit.MINUTES);
+        if (Boolean.FALSE.equals(cooldownSet)) {
             throw new TooManyRequestsException("새로고침은 5분에 한 번만 가능합니다.");
         }
-        stringRedisTemplate.opsForValue().set(key, "1", 5, TimeUnit.MINUTES);
         LocalDateTime nextAvailableAt = LocalDateTime.now().plusMinutes(5);
 
         CodefSyncResultDto result;
@@ -161,11 +162,6 @@ public class CodefSyncService {
         List<String> failedAccounts = new ArrayList<>();
 
         for (CodefConnectedAccount account : accounts) {
-            String lockKey = "codef:lock:" + account.getConnectedId();
-            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(lockKey))) {
-                throw new TooManyRequestsException("이전 요청이 처리 중입니다. 잠시 후 다시 시도해 주세요.");
-            }
-            stringRedisTemplate.opsForValue().set(lockKey, "1", 10, TimeUnit.SECONDS);
             try {
                 int[] counts = syncSingleCardAccount(userId, account, BATCH_CARD_MONTHS);
                 savedCount   += counts[0];
@@ -411,52 +407,61 @@ public class CodefSyncService {
     }
 
     private int[] syncSingleCardAccount(Long userId, CodefConnectedAccount account, int requestedMonths) throws Exception {
-        String org = account.getOrganizationCode();
-        int months = LIMITED_ORG_CARDS.contains(org)
-                ? Math.min(requestedMonths, LIMITED_CARD_MONTHS)
-                : requestedMonths;
-
-        LocalDate cursor = LocalDate.now().withDayOfMonth(1).minusMonths(months - 1);
-        LocalDate end    = LocalDate.now().withDayOfMonth(1);
-
-        int totalSaved = 0, totalSkipped = 0;
-        while (!cursor.isAfter(end)) {
-            // 제주카드(0321): startDate를 yyyyMMdd(해당 월 1일) 형식으로 전송
-            String startDate = JEJUCARD_ORG.equals(org)
-                    ? cursor.format(PARSE_FMT)
-                    : cursor.format(DATE_FMT);
-
-            HashMap<String, Object> params = new HashMap<>();
-            params.put("connectedId", account.getConnectedId());
-            params.put("organization", org);
-            params.put("startDate", startDate);
-
-            String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
-            JsonNode root = objectMapper.readTree(response);
-
-            String resultCode = root.path("result").path("code").asText();
-            if (!CODEF_SUCCESS.equals(resultCode)) {
-                String message = root.path("result").path("message").asText();
-                handleCodefError(resultCode, message, account);
-                return new int[]{totalSaved, totalSkipped};
-            }
-
-            JsonNode data = root.path("data");
-            if (data.isArray()) {
-                log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
-            } else {
-                JsonNode txArray = data.path("resChargeHistoryList");
-                if (txArray.isArray()) {
-                    int[] counts = saveExpensesFromTxArray(userId, org, txArray);
-                    totalSaved   += counts[0];
-                    totalSkipped += counts[1];
-                } else {
-                    log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
-                }
-            }
-            cursor = cursor.plusMonths(1);
+        String lockKey = "codef:lock:" + account.getConnectedId();
+        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SYNC_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
+        if (Boolean.FALSE.equals(acquired)) {
+            throw new TooManyRequestsException("동기화가 이미 진행 중입니다. 잠시 후 다시 시도해 주세요.");
         }
-        return new int[]{totalSaved, totalSkipped};
+        try {
+            String org = account.getOrganizationCode();
+            int months = LIMITED_ORG_CARDS.contains(org)
+                    ? Math.min(requestedMonths, LIMITED_CARD_MONTHS)
+                    : requestedMonths;
+
+            LocalDate cursor = LocalDate.now().withDayOfMonth(1).minusMonths(months - 1);
+            LocalDate end    = LocalDate.now().withDayOfMonth(1);
+
+            int totalSaved = 0, totalSkipped = 0;
+            while (!cursor.isAfter(end)) {
+                // 제주카드(0321): startDate를 yyyyMMdd(해당 월 1일) 형식으로 전송
+                String startDate = JEJUCARD_ORG.equals(org)
+                        ? cursor.format(PARSE_FMT)
+                        : cursor.format(DATE_FMT);
+
+                HashMap<String, Object> params = new HashMap<>();
+                params.put("connectedId", account.getConnectedId());
+                params.put("organization", org);
+                params.put("startDate", startDate);
+
+                String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
+                JsonNode root = objectMapper.readTree(response);
+
+                String resultCode = root.path("result").path("code").asText();
+                if (!CODEF_SUCCESS.equals(resultCode)) {
+                    String message = root.path("result").path("message").asText();
+                    handleCodefError(resultCode, message, account);
+                    return new int[]{totalSaved, totalSkipped};
+                }
+
+                JsonNode data = root.path("data");
+                if (data.isArray()) {
+                    log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
+                } else {
+                    JsonNode txArray = data.path("resChargeHistoryList");
+                    if (txArray.isArray()) {
+                        int[] counts = saveExpensesFromTxArray(userId, org, txArray);
+                        totalSaved   += counts[0];
+                        totalSkipped += counts[1];
+                    } else {
+                        log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
+                    }
+                }
+                cursor = cursor.plusMonths(1);
+            }
+            return new int[]{totalSaved, totalSkipped};
+        } finally {
+            stringRedisTemplate.delete(lockKey);
+        }
     }
 
     private int syncSingleStockAccount(Long userId, CodefConnectedAccount account) throws Exception {
@@ -465,88 +470,97 @@ public class CodefSyncService {
             return -1;
         }
 
-        HashMap<String, Object> params = new HashMap<>();
-        params.put("connectedId", account.getConnectedId());
-        params.put("organization", account.getOrganizationCode());
-        params.put("account", account.getAccountNumber());
-
-        String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
-        JsonNode root = objectMapper.readTree(response);
-
-        String resultCode = root.path("result").path("code").asText();
-        if (!CODEF_SUCCESS.equals(resultCode)) {
-            String message = root.path("result").path("message").asText();
-            handleCodefError(resultCode, message, account);
-            return 0;
+        String lockKey = "codef:lock:" + account.getConnectedId();
+        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SYNC_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
+        if (Boolean.FALSE.equals(acquired)) {
+            throw new TooManyRequestsException("동기화가 이미 진행 중입니다. 잠시 후 다시 시도해 주세요.");
         }
+        try {
+            HashMap<String, Object> params = new HashMap<>();
+            params.put("connectedId", account.getConnectedId());
+            params.put("organization", account.getOrganizationCode());
+            params.put("account", account.getAccountNumber());
 
-        JsonNode data = root.path("data");
-        JsonNode itemList = data.path("resItemList");
+            String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
+            JsonNode root = objectMapper.readTree(response);
 
-        String organization = account.getOrganizationCode();
-        long totalAsset = 0L;
-        int skippedItems = 0;
-        List<StockItemDto> items = new ArrayList<>();
-        if (itemList.isArray()) {
-            for (JsonNode item : itemList) {
-                // 종목 조회 실패 건 skip
-                if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
-                    log.debug("[CODEF Sync] resResultCode=0 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
-                    skippedItems++;
-                    continue;
-                }
-                // itemCode 없으면 UNIQUE 제약 키 없음 — skip
-                String itemCode = firstNonEmpty(item, "resItemCode");
-                if (itemCode.isBlank()) {
-                    log.debug("[CODEF Sync] itemCode 없음 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
-                    skippedItems++;
-                    continue;
-                }
-
-                String currencyCode = firstNonEmpty(item, "resAccountCurrency");
-
-                long valuationAmt;
-                long purchaseAmt;
-                long valuationPL;
-
-                if (GROUP_A_ORGS.contains(organization) || GROUP_B_ORGS.contains(organization)) {
-                    valuationAmt = parseLongField(item, "resValuationAmt");
-                    purchaseAmt  = parseLongField(item, "resPurchaseAmount");
-                    valuationPL  = parseLongField(item, "resValuationPL");
-                } else {
-                    // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
-                    valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
-                    purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
-                    valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
-                }
-                totalAsset += valuationAmt;
-
-                String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
-                BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
-
-                items.add(new StockItemDto(
-                        firstNonEmpty(item, "resProductType"),
-                        firstNonEmpty(item, "resItemName"),
-                        itemCode,
-                        (int) parseLongField(item, "resQuantity"),
-                        purchaseAmt,
-                        valuationAmt,
-                        valuationPL,
-                        earningsRate
-                ));
+            String resultCode = root.path("result").path("code").asText();
+            if (!CODEF_SUCCESS.equals(resultCode)) {
+                String message = root.path("result").path("message").asText();
+                handleCodefError(resultCode, message, account);
+                return 0;
             }
-        }
 
-        long depositReceived = parseLongField(data, "resDepositReceived");
-        StockAssetDto assetDto = new StockAssetDto(
-                organization, account.getAccountNumber(), totalAsset, depositReceived);
-        AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
-        if (!items.isEmpty()) {
-            assetService.saveOrUpdateItems(assetAccount, items);
-        }
+            JsonNode data = root.path("data");
+            JsonNode itemList = data.path("resItemList");
 
-        log.info("[CODEF Sync] 증권 upsert 완료 org={} 종목={}건 skip={}건", account.getOrganizationCode(), items.size(), skippedItems);
-        return 1;
+            String organization = account.getOrganizationCode();
+            long totalAsset = 0L;
+            int skippedItems = 0;
+            List<StockItemDto> items = new ArrayList<>();
+            if (itemList.isArray()) {
+                for (JsonNode item : itemList) {
+                    // 종목 조회 실패 건 skip
+                    if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
+                        log.debug("[CODEF Sync] resResultCode=0 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
+                        skippedItems++;
+                        continue;
+                    }
+                    // itemCode 없으면 UNIQUE 제약 키 없음 — skip
+                    String itemCode = firstNonEmpty(item, "resItemCode");
+                    if (itemCode.isBlank()) {
+                        log.debug("[CODEF Sync] itemCode 없음 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
+                        skippedItems++;
+                        continue;
+                    }
+
+                    String currencyCode = firstNonEmpty(item, "resAccountCurrency");
+
+                    long valuationAmt;
+                    long purchaseAmt;
+                    long valuationPL;
+
+                    if (GROUP_A_ORGS.contains(organization) || GROUP_B_ORGS.contains(organization)) {
+                        valuationAmt = parseLongField(item, "resValuationAmt");
+                        purchaseAmt  = parseLongField(item, "resPurchaseAmount");
+                        valuationPL  = parseLongField(item, "resValuationPL");
+                    } else {
+                        // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
+                        valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                        purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                        valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                    }
+                    totalAsset += valuationAmt;
+
+                    String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
+                    BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
+
+                    items.add(new StockItemDto(
+                            firstNonEmpty(item, "resProductType"),
+                            firstNonEmpty(item, "resItemName"),
+                            itemCode,
+                            (int) parseLongField(item, "resQuantity"),
+                            purchaseAmt,
+                            valuationAmt,
+                            valuationPL,
+                            earningsRate
+                    ));
+                }
+            }
+
+            long depositReceived = parseLongField(data, "resDepositReceived");
+            StockAssetDto assetDto = new StockAssetDto(
+                    organization, account.getAccountNumber(), totalAsset, depositReceived);
+            AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
+            if (!items.isEmpty()) {
+                assetService.saveOrUpdateItems(assetAccount, items);
+            }
+
+            log.info("[CODEF Sync] 증권 upsert 완료 org={} 종목={}건 skip={}건", account.getOrganizationCode(), items.size(), skippedItems);
+            return 1;
+        } finally {
+            stringRedisTemplate.delete(lockKey);
+        }
     }
 
     // txArray → CardBillingDto 리스트 변환 후 ExpenseSaveService 위임

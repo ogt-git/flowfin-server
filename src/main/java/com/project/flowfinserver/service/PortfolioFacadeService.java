@@ -43,7 +43,7 @@ public class PortfolioFacadeService {
             "본 정보는 AI가 작성했으며 투자 조언이 아니라 정보 제공 목적이고, 투자 판단과 책임은 본인에게 있습니다.";
     private static final String LOCK_KEY_PREFIX = "portfolio:lock:";
     // 최악 실행시간: OpenAI 3회 재시도(187s) × MAX_ATTEMPTS(2) ≈ 374s → 15분으로 충분한 여유 확보
-    private static final long LOCK_TTL_MINUTES = 15L;
+    private static final long LOCK_TTL_MINUTES = 10L;
     private static final long COOLDOWN_MINUTES = 5L;
     private static final long CACHE_HOURS = 24L;
 

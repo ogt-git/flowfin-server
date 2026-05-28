@@ -45,6 +45,18 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(message, "VALIDATION_ERROR"));
     }
 
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<ApiResponse<?>> handleAuth(AuthException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(e.getMessage(), ErrorCode.AUTH_FAILED.name()));
+    }
+
+    @ExceptionHandler(DuplicateEmailException.class)
+    public ResponseEntity<ApiResponse<?>> handleDuplicateEmail(DuplicateEmailException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(e.getMessage(), ErrorCode.DUPLICATE_EMAIL.name()));
+    }
+
     //데이터 중복 방지 핸들러
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<?>> handleDataIntegrity(DataIntegrityViolationException e) {

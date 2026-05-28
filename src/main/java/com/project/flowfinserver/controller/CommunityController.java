@@ -5,6 +5,7 @@ import com.project.flowfinserver.dto.CommunityResponse;
 import com.project.flowfinserver.dto.LikeResponse;
 import com.project.flowfinserver.dto.PortfolioShareRequest;
 import com.project.flowfinserver.service.CommunityService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -33,7 +34,7 @@ public class CommunityController {
 
     @PostMapping
     public ResponseEntity<CommunityResponse> createPost(
-            @RequestBody CommunityRequest request,
+            @Valid @RequestBody CommunityRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ResponseEntity.ok(communityService.createPost(request, userId));
@@ -42,7 +43,7 @@ public class CommunityController {
     @PutMapping("/{id}")
     public ResponseEntity<CommunityResponse> updatePost(
             @PathVariable Long id,
-            @RequestBody CommunityRequest request,
+            @Valid @RequestBody CommunityRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ResponseEntity.ok(communityService.updatePost(id, request, userId));

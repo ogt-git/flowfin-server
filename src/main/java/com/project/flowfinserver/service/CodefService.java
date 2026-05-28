@@ -293,7 +293,6 @@ public class CodefService {
                 ? request.getStartDate()
                 : LocalDate.now().minusMonths(3).format(BILLING_DATE_FMT);
         params.put("startDate", startDate);
-        if (hasValue(request.getEndDate()))             params.put("endDate", request.getEndDate());
         if (hasValue(request.getBirthDate()))           params.put("birthDate", request.getBirthDate());
         if (hasValue(request.getInquiryType()))         params.put("inquiryType", request.getInquiryType());
         if (hasValue(request.getMemberStoreInfoType())) params.put("memberStoreInfoType", request.getMemberStoreInfoType());
@@ -311,9 +310,6 @@ public class CodefService {
         params.put("account", request.getAccount());
 
         if (hasValue(request.getAccountPassword())) params.put("accountPassword", codefApiClient.encryptRSA(request.getAccountPassword()));
-        if (hasValue(request.getInquiryType()))     params.put("inquiryType", request.getInquiryType());
-        if (hasValue(request.getId()))              params.put("id", request.getId());
-        if (hasValue(request.getAddPassword()))     params.put("add_password", codefApiClient.encryptRSA(request.getAddPassword()));
 
         return codefApiClient.requestProduct("/v1/kr/stock/a/account/financial-assets", params);
     }

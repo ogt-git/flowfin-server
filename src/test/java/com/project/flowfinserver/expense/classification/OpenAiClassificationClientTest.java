@@ -126,10 +126,6 @@ class OpenAiClassificationClientTest {
     @Test
     @DisplayName("JSON 코드펜스(```json)가 포함된 응답도 정상 파싱한다")
     void JSON_코드펜스_포함_응답을_정상_파싱한다() {
-        String content = "```json\\n{\\\\\\\"category_id\\\\\\\":5,\\\\\\\"confidence\\\\\\\":75}\\n```";
-        // 실제 content 문자열: ```json\n{"category_id":5,"confidence":75}\n```
-        String actualContent = "```json\n{\"category_id\":5,\"confidence\":75}\n```";
-        String responseBody = "{\"choices\":[{\"message\":{\"content\":\"\"}}]}";
 
         // 직접 파싱 테스트를 위해 content 필드를 제어
         given(openAiRestTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))

@@ -15,17 +15,21 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 @Tag(name = "CODEF", description = "CODEF 계정 연결 및 금융 데이터 동기화 API")
+@Validated
 @RestController
 @RequestMapping("/api/codef")
 @RequiredArgsConstructor
@@ -50,10 +54,10 @@ public class CodefController {
     @PostMapping(value = "/connect", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<String>> connectAccount(
             Authentication authentication,
-            @RequestParam("organization") String organization,
-            @RequestParam("businessType") String businessType,
-            @RequestParam("loginType") String loginType,
-            @RequestParam("password") String password,
+            @NotBlank(message = "기관코드는 필수입니다") @RequestParam("organization") String organization,
+            @Pattern(regexp = "^(CD|ST)$", message = "businessType은 CD 또는 ST이어야 합니다") @RequestParam("businessType") String businessType,
+            @Pattern(regexp = "^[01]$", message = "loginType은 0 또는 1이어야 합니다") @RequestParam("loginType") String loginType,
+            @NotBlank(message = "비밀번호는 필수입니다") @RequestParam("password") String password,
             @RequestParam(value = "id", required = false) String id,
             @RequestParam(value = "birthDate", required = false) String birthDate,
             @RequestParam(value = "accountNumber", required = false) String accountNumber,

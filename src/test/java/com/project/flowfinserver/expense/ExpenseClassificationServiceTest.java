@@ -5,6 +5,8 @@ package com.project.flowfinserver.expense;
 
 import com.project.flowfinserver.domain.Category;
 import com.project.flowfinserver.domain.ClassifiedBy;
+import com.project.flowfinserver.domain.MatchType;
+import com.project.flowfinserver.domain.MerchantCategoryRule;
 import com.project.flowfinserver.dto.ClassificationResult;
 import com.project.flowfinserver.repository.CategoryRepository;
 import com.project.flowfinserver.service.ExpenseClassificationService;
@@ -42,7 +44,8 @@ class ExpenseClassificationServiceTest {
     @DisplayName("키워드 매핑 성공 시 classifiedBy가 RULE이다")
     void 키워드_매핑_성공_시_classifiedBy가_RULE이다() {
         Category cat5 = mock(Category.class);
-        given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        MerchantCategoryRule rule = ruleOf(5L, 100);
+        given(keywordClassifier.classify(MERCHANT)).willReturn(rule);
         given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
         ClassificationResult result = classificationService.classify(MERCHANT);
@@ -53,16 +56,17 @@ class ExpenseClassificationServiceTest {
     }
 
     @Test
-    @DisplayName("키워드 매핑 성공 시 confidence가 100이다")
-    void 키워드_매핑_성공_시_confidence가_100이다() {
+    @DisplayName("키워드 매핑 성공 시 confidence가 rule.priority와 동일하다")
+    void 키워드_매핑_성공_시_confidence가_rule_priority와_일치한다() {
         Category cat5 = mock(Category.class);
-        given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        MerchantCategoryRule rule = ruleOf(5L, 100);
+        given(keywordClassifier.classify(MERCHANT)).willReturn(rule);
         given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
         ClassificationResult result = classificationService.classify(MERCHANT);
 
         assertThat(result.getConfidence())
-                .as("Rule 분류 결과의 confidence는 항상 100이어야 한다")
+                .as("Rule 분류 결과의 confidence는 rule.priority(100)이어야 한다")
                 .isEqualTo(100);
     }
 
@@ -70,7 +74,8 @@ class ExpenseClassificationServiceTest {
     @DisplayName("키워드 매핑 성공 시 반환된 Category 객체가 DB 조회 결과와 동일하다")
     void 키워드_매핑_성공_시_Category가_DB조회_결과와_일치한다() {
         Category cat5 = mock(Category.class);
-        given(keywordClassifier.classify(MERCHANT)).willReturn(5L);
+        MerchantCategoryRule rule = ruleOf(5L, 100);
+        given(keywordClassifier.classify(MERCHANT)).willReturn(rule);
         given(categoryRepository.findById(5L)).willReturn(Optional.of(cat5));
 
         ClassificationResult result = classificationService.classify(MERCHANT);
@@ -126,7 +131,7 @@ class ExpenseClassificationServiceTest {
         Category cat5 = mock(Category.class);
         given(cat5.getId()).willReturn(5L);
 
-        ClassificationResult result = ClassificationResult.ofRule(cat5);
+        ClassificationResult result = ClassificationResult.ofRule(cat5, 100);
 
         assertThat(result.getCategory().getId()).isEqualTo(5L);
         assertThat(result.getClassifiedBy()).isEqualTo(ClassifiedBy.RULE);
@@ -166,5 +171,16 @@ class ExpenseClassificationServiceTest {
         assertThat(result.getCategory().getId()).isEqualTo(7L);
         assertThat(result.getClassifiedBy()).isEqualTo(ClassifiedBy.AI);
         assertThat(result.getConfidence()).isEqualTo(82);
+    }
+
+    // ==================== 헬퍼 ====================
+
+    private MerchantCategoryRule ruleOf(Long categoryId, int priority) {
+        return MerchantCategoryRule.builder()
+                .keyword("테스트키워드")
+                .categoryId(categoryId)
+                .matchType(MatchType.EXACT)
+                .priority(priority)
+                .build();
     }
 }

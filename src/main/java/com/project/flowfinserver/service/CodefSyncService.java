@@ -46,6 +46,10 @@ public class CodefSyncService {
     private static final String CODEF_SUCCESS = "CF-00000";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMM");
     private static final DateTimeFormatter PARSE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final int DEFAULT_CARD_MONTHS = 12;
+    private static final int LIMITED_CARD_MONTHS = 4;   // BC카드(0305), 수협(0320) 조회 가능 기간 제한
+    private static final Set<String> LIMITED_ORG_CARDS = Set.of("0305", "0320");
+    private static final String JEJUCARD_ORG = "0321";  // 제주카드: startDate yyyyMMdd 형식 요구
 
     // 2026-05-20 기준 고정 환율: 1 USD = 1,500 KRW
     private static final long USD_TO_KRW_RATE = 1_500L;
@@ -228,6 +232,13 @@ public class CodefSyncService {
         List<StockItemDto> items = new ArrayList<>();
         if (itemList.isArray()) {
             for (JsonNode item : itemList) {
+                // 종목 조회 실패 건 skip
+                if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
+                    log.debug("[CODEF] resResultCode=0 skip itemName={}", firstNonEmpty(item, "resItemName"));
+                    skippedCount++;
+                    continue;
+                }
+
                 String currencyCode = firstNonEmpty(item, "resAccountCurrency");
 
                 long valuationAmt;
@@ -391,36 +402,50 @@ public class CodefSyncService {
     }
 
     private int[] syncSingleCardAccount(Long userId, CodefConnectedAccount account) throws Exception {
-        String startDate = LocalDate.now().minusMonths(3).format(DATE_FMT);
+        String org = account.getOrganizationCode();
+        int months = LIMITED_ORG_CARDS.contains(org) ? LIMITED_CARD_MONTHS : DEFAULT_CARD_MONTHS;
 
-        HashMap<String, Object> params = new HashMap<>();
-        params.put("connectedId", account.getConnectedId());
-        params.put("organization", account.getOrganizationCode());
-        params.put("startDate", startDate);
+        LocalDate cursor = LocalDate.now().withDayOfMonth(1).minusMonths(months - 1);
+        LocalDate end    = LocalDate.now().withDayOfMonth(1);
 
-        String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
-        JsonNode root = objectMapper.readTree(response);
+        int totalSaved = 0, totalSkipped = 0;
+        while (!cursor.isAfter(end)) {
+            // 제주카드(0321): startDate를 yyyyMMdd(해당 월 1일) 형식으로 전송
+            String startDate = JEJUCARD_ORG.equals(org)
+                    ? cursor.format(PARSE_FMT)
+                    : cursor.format(DATE_FMT);
 
-        String resultCode = root.path("result").path("code").asText();
-        if (!CODEF_SUCCESS.equals(resultCode)) {
-            String message = root.path("result").path("message").asText();
-            handleCodefError(resultCode, message, account);
-            return new int[]{0, 0};
+            HashMap<String, Object> params = new HashMap<>();
+            params.put("connectedId", account.getConnectedId());
+            params.put("organization", org);
+            params.put("startDate", startDate);
+
+            String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
+            JsonNode root = objectMapper.readTree(response);
+
+            String resultCode = root.path("result").path("code").asText();
+            if (!CODEF_SUCCESS.equals(resultCode)) {
+                String message = root.path("result").path("message").asText();
+                handleCodefError(resultCode, message, account);
+                return new int[]{totalSaved, totalSkipped};
+            }
+
+            JsonNode data = root.path("data");
+            if (data.isArray()) {
+                log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
+            } else {
+                JsonNode txArray = data.path("resChargeHistoryList");
+                if (txArray.isArray()) {
+                    int[] counts = saveExpensesFromTxArray(userId, org, txArray);
+                    totalSaved   += counts[0];
+                    totalSkipped += counts[1];
+                } else {
+                    log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
+                }
+            }
+            cursor = cursor.plusMonths(1);
         }
-
-        JsonNode data = root.path("data");
-        if (data.isArray()) {
-            log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", account.getOrganizationCode(), startDate);
-            return new int[]{0, 0};
-        }
-
-        JsonNode txArray = data.path("resChargeHistoryList");
-        if (!txArray.isArray()) {
-            log.warn("[CODEF Sync] resChargeHistoryList 없음 org={}", account.getOrganizationCode());
-            return new int[]{0, 0};
-        }
-
-        return saveExpensesFromTxArray(userId, account.getOrganizationCode(), txArray);
+        return new int[]{totalSaved, totalSkipped};
     }
 
     private int syncSingleStockAccount(Long userId, CodefConnectedAccount account) throws Exception {
@@ -449,9 +474,24 @@ public class CodefSyncService {
 
         String organization = account.getOrganizationCode();
         long totalAsset = 0L;
+        int skippedItems = 0;
         List<StockItemDto> items = new ArrayList<>();
         if (itemList.isArray()) {
             for (JsonNode item : itemList) {
+                // 종목 조회 실패 건 skip
+                if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
+                    log.debug("[CODEF Sync] resResultCode=0 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
+                    skippedItems++;
+                    continue;
+                }
+                // itemCode 없으면 UNIQUE 제약 키 없음 — skip
+                String itemCode = firstNonEmpty(item, "resItemCode");
+                if (itemCode.isBlank()) {
+                    log.debug("[CODEF Sync] itemCode 없음 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
+                    skippedItems++;
+                    continue;
+                }
+
                 String currencyCode = firstNonEmpty(item, "resAccountCurrency");
 
                 long valuationAmt;
@@ -476,7 +516,7 @@ public class CodefSyncService {
                 items.add(new StockItemDto(
                         firstNonEmpty(item, "resProductType"),
                         firstNonEmpty(item, "resItemName"),
-                        firstNonEmpty(item, "resItemCode"),
+                        itemCode,
                         (int) parseLongField(item, "resQuantity"),
                         purchaseAmt,
                         valuationAmt,
@@ -494,7 +534,7 @@ public class CodefSyncService {
             assetService.saveOrUpdateItems(assetAccount, items);
         }
 
-        log.info("[CODEF Sync] 증권 upsert 완료 org={} 종목={}건", account.getOrganizationCode(), items.size());
+        log.info("[CODEF Sync] 증권 upsert 완료 org={} 종목={}건 skip={}건", account.getOrganizationCode(), items.size(), skippedItems);
         return 1;
     }
 
@@ -503,7 +543,14 @@ public class CodefSyncService {
     private int[] saveExpensesFromTxArray(Long userId, String organizationCode, JsonNode txArray) {
         List<CardBillingDto> items = new ArrayList<>();
         for (JsonNode tx : txArray) {
-            String dateStr   = firstNonEmpty(tx, "resUsedDate");
+            String paymentType = firstNonEmpty(tx, "resPaymentType");
+            // 단기/장기 카드대출은 지출이 아닌 대출상환 — 저장 제외
+            if ("4".equals(paymentType) || "5".equals(paymentType)) continue;
+
+            String dateStr = firstNonEmpty(tx, "resUsedDate");
+            // resUsedDate 미제공 시 결제예정일로 대체 (KB 할인혜택, 현대 이월약정, 신한 연회비 등)
+            if (dateStr.isEmpty()) dateStr = firstNonEmpty(tx, "resPaymentDueDate");
+
             String merchant  = firstNonEmpty(tx, "resMemberStoreName");
             String amountStr = firstNonEmpty(tx, "resUsedAmount", "resPaymentPrincipal", "resPaymentAmt")
                     .replaceAll("[^0-9\\-]", "");
@@ -513,7 +560,6 @@ public class CodefSyncService {
             long amount = Long.parseLong(amountStr);
             if (amount == 0) continue;
 
-            String paymentType = firstNonEmpty(tx, "resPaymentType");
             String usedCard = firstNonEmpty(tx, "resUsedCard");
 
             LocalDateTime expenseDate = LocalDate.parse(dateStr, PARSE_FMT).atStartOfDay();

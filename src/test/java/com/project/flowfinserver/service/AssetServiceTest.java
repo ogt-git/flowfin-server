@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -42,6 +43,7 @@ class AssetServiceTest {
     @Mock CategoryRepository categoryRepository;
     @Mock ExpenseRepository expenseRepository;
 
+    @Spy
     @InjectMocks
     AssetService assetService;
 
@@ -219,6 +221,37 @@ class AssetServiceTest {
         then(assetItemRepository).should(never()).save(any(AssetItem.class));
         assertThat(existingItem.getQuantity()).isEqualTo(20);
         assertThat(existingItem.getValuationAmt()).isEqualTo(2_200_000L);
+    }
+
+    @Test
+    @DisplayName("syncAssetData — itemCode가 null인 종목은 skip, 정상 itemCode 종목만 save 호출")
+    void syncAssetData_itemCode없음_skip() {
+        AssetAccount account = AssetAccount.create(USER_ID, BROKER_CODE, ACCOUNT_NO, 1_000_000L, 0L);
+        given(assetAccountRepository.findByUserIdAndBrokerCode(USER_ID, BROKER_CODE))
+                .willReturn(Optional.of(account));
+
+        StockItemDto noCode = new StockItemDto("채권", "국공채", null, 1,
+                100_000L, 100_000L, 0L, BigDecimal.ZERO);
+        StockItemDto normal = new StockItemDto("주식", "삼성전자", "005930", 10,
+                1_000_000L, 1_100_000L, 100_000L, new BigDecimal("10.00"));
+        given(assetItemRepository.findByAccountIdAndItemCode(any(), eq("005930"))).willReturn(Optional.empty());
+        given(assetItemRepository.save(any(AssetItem.class))).willReturn(null);
+
+        assetService.syncAssetData(USER_ID, dto, List.of(noCode, normal));
+
+        // itemCode=null 종목은 skip → save 1회만 호출
+        then(assetItemRepository).should(times(1)).save(any(AssetItem.class));
+    }
+
+    @Test
+    @DisplayName("syncAssetData 완료 후 updateInvestableAmount가 1회 호출된다")
+    void syncAssetData_완료_후_updateInvestableAmount_호출() {
+        given(assetAccountRepository.findByUserIdAndBrokerCode(USER_ID, BROKER_CODE))
+                .willReturn(Optional.of(AssetAccount.create(USER_ID, BROKER_CODE, ACCOUNT_NO, 2_000_000L, 500_000L)));
+
+        assetService.syncAssetData(USER_ID, dto, List.of());
+
+        then(assetService).should(times(1)).updateInvestableAmount(USER_ID);
     }
 
     @Test

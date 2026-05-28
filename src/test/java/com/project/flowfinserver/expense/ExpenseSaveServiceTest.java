@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,7 +60,7 @@ class ExpenseSaveServiceTest {
 
     @BeforeEach
     void setUp() {
-        ruleResult = ClassificationResult.ofRule(mock(Category.class));
+        ruleResult = ClassificationResult.ofRule(mock(Category.class), 100);
         starbucks = new CardBillingDto("0301", "", 6500L,  "스타벅스",  LocalDateTime.of(2024, 4, 1, 0, 0), "1");
         coupang   = new CardBillingDto("0301", "", 35000L, "쿠팡",      LocalDateTime.of(2024, 4, 2, 0, 0), "1");
         netflix   = new CardBillingDto("0301", "", 13500L, "넷플릭스",  LocalDateTime.of(2024, 4, 3, 0, 0), "1");
@@ -193,13 +194,15 @@ class ExpenseSaveServiceTest {
         given(classificationService.classify(anyString())).willReturn(pendingResult);
         Expense savedExpense = Expense.create(USER_ID, "0301", "", 6500L, "미분류가맹점",
                 LocalDateTime.of(2024, 4, 1, 0, 0), null, ClassifiedBy.PENDING, null);
+        ReflectionTestUtils.setField(savedExpense, "id", 1L);
         given(expenseRepository.save(any(Expense.class))).willReturn(savedExpense);
 
         ExpenseSaveResult result = expenseSaveService.saveExpenses(USER_ID, List.of(starbucks));
 
         assertThat(result.pendingAiIds())
-                .as("Rule 실패 건의 ID가 pendingAiIds에 포함되어야 한다")
-                .hasSize(1);
+                .as("Rule 실패 건의 ID가 pendingAiIds에 포함되어야 한다 — null 없이 정상 ID만 포함")
+                .doesNotContainNull()
+                .containsExactly(1L);
     }
 
     @Test

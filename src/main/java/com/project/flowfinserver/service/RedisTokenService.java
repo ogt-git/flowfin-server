@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 public class RedisTokenService {
 
     private static final String REFRESH_TOKEN_PREFIX = "refresh:token:";
-    private static final long REFRESH_TTL_DAYS = 7;
+    private static final long REFRESH_TTL_DAYS = 1;
 
     private final RedisTemplate<String, String> redisTemplate;
 

@@ -40,6 +40,20 @@ public class AsyncConfig {
         return executor;
     }
 
+    @Bean("codefExecutor")
+    public ThreadPoolTaskExecutor codefExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(3);
+        executor.setQueueCapacity(10);
+        executor.setThreadNamePrefix("codef-sync-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
+
     @Bean("openAiRestTemplate")
     public RestTemplate openAiRestTemplate(
             @Value("${openai.classification.timeout-ms:10000}") int timeoutMs) {

@@ -47,6 +47,7 @@ public class CodefSyncService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMM");
     private static final DateTimeFormatter PARSE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final int DEFAULT_CARD_MONTHS = 12;
+    private static final int BATCH_CARD_MONTHS = 2;
     private static final int LIMITED_CARD_MONTHS = 4;   // BC카드(0305), 수협(0320) 조회 가능 기간 제한
     private static final Set<String> LIMITED_ORG_CARDS = Set.of("0305", "0320");
     private static final String JEJUCARD_ORG = "0321";  // 제주카드: startDate yyyyMMdd 형식 요구
@@ -122,12 +123,21 @@ public class CodefSyncService {
                 .build();
     }
 
-    // 배치 전용 — 단일 연동 계정 동기화
+    // 배치 전용 — 단일 연동 계정 동기화 (최근 2개월치만 조회)
     // TRANSIENT_ERROR → CodefRetryableException (배치가 재시도)
     // 그 외 오류 → handleCodefError에서 처리 후 CodefApiException 또는 CodefAuthException throw
     public void syncConnection(CodefConnectedAccount conn) throws Exception {
         if (conn.getAccountType() == AccountType.CARD) {
-            syncSingleCardAccount(conn.getUserId(), conn);
+            syncSingleCardAccount(conn.getUserId(), conn, BATCH_CARD_MONTHS);
+        } else if (conn.getAccountType() == AccountType.STOCK) {
+            syncSingleStockAccount(conn.getUserId(), conn);
+        }
+    }
+
+    // 최초 연동 전용 — 전체 기간(12개월) 조회
+    public void syncConnectionInitial(CodefConnectedAccount conn) throws Exception {
+        if (conn.getAccountType() == AccountType.CARD) {
+            syncSingleCardAccount(conn.getUserId(), conn, DEFAULT_CARD_MONTHS);
         } else if (conn.getAccountType() == AccountType.STOCK) {
             syncSingleStockAccount(conn.getUserId(), conn);
         }
@@ -140,7 +150,6 @@ public class CodefSyncService {
                 .ifPresent(CodefConnectedAccount::deactivate);
     }
 
-    // 카드 지출 내역 연동 — 최근 3개월, 계정별 독립 try-catch
     public CodefSyncResultDto syncCard(Long userId) {
         List<CodefConnectedAccount> accounts =
                 connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(userId, AccountType.CARD);
@@ -158,7 +167,7 @@ public class CodefSyncService {
             }
             stringRedisTemplate.opsForValue().set(lockKey, "1", 10, TimeUnit.SECONDS);
             try {
-                int[] counts = syncSingleCardAccount(userId, account);
+                int[] counts = syncSingleCardAccount(userId, account, BATCH_CARD_MONTHS);
                 savedCount   += counts[0];
                 skippedCount += counts[1];
             } catch (CodefAccountNotFoundException e) {
@@ -401,9 +410,11 @@ public class CodefSyncService {
                 .ifPresent(CodefConnectedAccount::deactivate);
     }
 
-    private int[] syncSingleCardAccount(Long userId, CodefConnectedAccount account) throws Exception {
+    private int[] syncSingleCardAccount(Long userId, CodefConnectedAccount account, int requestedMonths) throws Exception {
         String org = account.getOrganizationCode();
-        int months = LIMITED_ORG_CARDS.contains(org) ? LIMITED_CARD_MONTHS : DEFAULT_CARD_MONTHS;
+        int months = LIMITED_ORG_CARDS.contains(org)
+                ? Math.min(requestedMonths, LIMITED_CARD_MONTHS)
+                : requestedMonths;
 
         LocalDate cursor = LocalDate.now().withDayOfMonth(1).minusMonths(months - 1);
         LocalDate end    = LocalDate.now().withDayOfMonth(1);

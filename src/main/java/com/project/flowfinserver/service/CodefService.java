@@ -214,14 +214,14 @@ public class CodefService {
     private void fetchAndSaveCardBilling(Long userId, CodefConnectedAccount connection) {
         log.info("[InitialSync] CARD 최초 동기화 시작 userId={} org={}", userId, connection.getOrganizationCode());
         try {
-            codefSyncService.syncConnection(connection);
+            codefSyncService.syncConnectionInitial(connection);
         } catch (Exception e) {
             if (isDuplicateLoginException(e)) {
                 log.warn("[InitialSync] CF-12201 중복 로그인 — 5초 후 재시도 userId={} org={}",
                         userId, connection.getOrganizationCode());
                 sleepQuietly(5_000);
                 try {
-                    codefSyncService.syncConnection(connection);
+                    codefSyncService.syncConnectionInitial(connection);
                 } catch (Exception retry) {
                     log.warn("[InitialSync] CARD 재시도 실패 userId={} org={}",
                             userId, connection.getOrganizationCode(), retry);

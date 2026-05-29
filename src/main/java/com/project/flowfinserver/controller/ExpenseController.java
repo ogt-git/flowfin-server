@@ -118,12 +118,6 @@ public class ExpenseController {
             }
         }
 
-        LocalDate start = startDate != null
-                ? YearMonth.parse(startDate, MONTH_FMT).atDay(1)
-                : LocalDate.now().minusMonths(3).withDayOfMonth(1);
-        LocalDate end = endDate != null
-                ? YearMonth.parse(endDate, MONTH_FMT).atEndOfMonth()
-                : LocalDate.now();
         LocalDate start;
         LocalDate end;
         try {

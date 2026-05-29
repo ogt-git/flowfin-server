@@ -227,7 +227,7 @@ public class CodefService {
      * CF-12201(중복 로그인)이 발생하므로, 5초 대기 후 동기화를 시작한다.
      * CF-12201 재발 시 추가 5초 대기 후 1회 재시도한다.
      */
-    @Async
+    @Async("codefExecutor")
     public void triggerInitialSync(Long userId, CodefConnectedAccount connection) {
         log.info("[InitialSync] 최초 동기화 시작 userId={} org={} type={}",
                 userId, connection.getOrganizationCode(), connection.getAccountType());
@@ -242,14 +242,14 @@ public class CodefService {
     private void fetchAndSaveCardBilling(Long userId, CodefConnectedAccount connection) {
         log.info("[InitialSync] CARD 최초 동기화 시작 userId={} org={}", userId, connection.getOrganizationCode());
         try {
-            codefSyncService.syncConnection(connection);
+            codefSyncService.syncConnectionInitial(connection);
         } catch (Exception e) {
             if (isDuplicateLoginException(e)) {
                 log.warn("[InitialSync] CF-12201 중복 로그인 — 5초 후 재시도 userId={} org={}",
                         userId, connection.getOrganizationCode());
                 sleepQuietly(5_000);
                 try {
-                    codefSyncService.syncConnection(connection);
+                    codefSyncService.syncConnectionInitial(connection);
                 } catch (Exception retry) {
                     log.warn("[InitialSync] CARD 재시도 실패 userId={} org={}",
                             userId, connection.getOrganizationCode(), retry);

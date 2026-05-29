@@ -37,7 +37,7 @@ public class PortfolioService {
 
     private static final String FIXED_DISCLAIMER = "본 정보는 AI가 작성했으며 투자 조언이 아니라 정보 제공 목적이고, 투자 판단과 책임은 본인에게 있습니다.";
 
-    private static final int MAX_ATTEMPTS = 2;
+    private static final int MAX_ATTEMPTS = 1;
 
     private static final Set<String> VALID_ASSET_CLASSES = Arrays.stream(AssetClass.values())
             .map(AssetClass::getDisplayName)

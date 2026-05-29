@@ -97,6 +97,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage(), ErrorCode.TOO_MANY_REQUESTS.name()));
     }
 
+    @ExceptionHandler(RiskTypeNotSetException.class)
+    public ResponseEntity<ApiResponse<?>> handleRiskTypeNotSet(RiskTypeNotSetException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(e.getMessage(), "RISK_TYPE_NOT_SET"));
+    }
+
     @ExceptionHandler(CodefAuthException.class)
     public ResponseEntity<ApiResponse<?>> handleCodefAuth(CodefAuthException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -28,6 +28,5 @@ public class SignupRequest {
     @Size(max = 30, message = "이름은 30자 이하로 입력해주세요")
     private String name;
 
-    @NotNull(message = "투자 성향을 조사해주세요")
     private RiskType riskType;
 }

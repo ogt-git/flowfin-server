@@ -5,6 +5,7 @@ import com.project.flowfinserver.domain.Expense;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -86,4 +87,9 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
                                @Param("startOfDay") LocalDateTime startOfDay);
 
     void deleteAllByUserId(Long userId);
+
+    @Modifying
+    @Query("DELETE FROM Expense e WHERE e.userId = :userId AND e.cardCompany = :cardCompany")
+    void deleteAllByUserIdAndCardCompany(@Param("userId") Long userId,
+                                         @Param("cardCompany") String cardCompany);
 }

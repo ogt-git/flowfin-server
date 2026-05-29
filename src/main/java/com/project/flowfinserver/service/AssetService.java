@@ -230,6 +230,7 @@ public class AssetService {
                                     item.getItemName(),
                                     item.getItemCode(),
                                     item.getQuantity(),
+                                    item.getPurchaseAmount(),
                                     item.getValuationAmt(),
                                     item.getValuationPl(),
                                     item.getEarningsRate()))

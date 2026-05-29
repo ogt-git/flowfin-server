@@ -25,10 +25,11 @@ public class ManualAssetService {
     @Transactional
     public ManualAssetResponse save(Long userId, ManualAssetRequest request) {
         ManualAsset asset = ManualAsset.create(
-                userId, request.assetType(), request.amount(), request.memo());
+                userId, request.assetType(), request.itemName(),
+                request.purchaseAmount(), request.valuationAmt(), request.purchaseDate(), request.memo());
         ManualAsset saved = manualAssetRepository.save(asset);
 
-        log.debug("[ManualAsset] 저장 userId={} type={} amount={}", userId, request.assetType(), request.amount());
+        log.debug("[ManualAsset] 저장 userId={} type={} amount={}", userId, request.assetType(), request.valuationAmt());
         assetService.updateInvestableAmount(userId);
         return ManualAssetResponse.from(saved);
     }
@@ -36,7 +37,8 @@ public class ManualAssetService {
     @Transactional
     public ManualAssetResponse update(Long userId, Long assetId, ManualAssetRequest request) {
         ManualAsset asset = findOwnedAsset(userId, assetId);
-        asset.update(request.assetType(), request.amount(), request.memo());
+        asset.update(request.assetType(), request.itemName(),
+                request.purchaseAmount(), request.valuationAmt(), request.purchaseDate(), request.memo());
 
         log.debug("[ManualAsset] 수정 userId={} assetId={}", userId, assetId);
         assetService.updateInvestableAmount(userId);

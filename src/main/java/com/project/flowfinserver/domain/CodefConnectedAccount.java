@@ -59,6 +59,11 @@ public class CodefConnectedAccount {
         this.isActive = false;
     }
 
+    public void reactivate(String newConnectedId) {
+        this.connectedId = newConnectedId;
+        this.isActive = true;
+    }
+
     public void updateAccountNumber(String accountNumber) {
         this.accountNumber = accountNumber;
     }

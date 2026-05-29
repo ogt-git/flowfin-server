@@ -16,6 +16,7 @@ public class PageResponse<T> {
     private final int currentPage;
     private final int pageSize;
     private final boolean isLast;
+    private final Long totalAmount;
 
     public static <T> PageResponse<T> of(Page<?> page, List<T> content) {
         return PageResponse.<T>builder()
@@ -25,6 +26,18 @@ public class PageResponse<T> {
                 .currentPage(page.getNumber())
                 .pageSize(page.getSize())
                 .isLast(page.isLast())
+                .build();
+    }
+
+    public static <T> PageResponse<T> of(Page<?> page, List<T> content, Long totalAmount) {
+        return PageResponse.<T>builder()
+                .content(content)
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .currentPage(page.getNumber())
+                .pageSize(page.getSize())
+                .isLast(page.isLast())
+                .totalAmount(totalAmount)
                 .build();
     }
 }

@@ -1,5 +1,6 @@
 package com.project.flowfinserver.controller;
 
+import com.project.flowfinserver.domain.CategoryType;
 import com.project.flowfinserver.dto.ApiResponse;
 import com.project.flowfinserver.dto.PageResponse;
 import com.project.flowfinserver.dto.expense.CategoryUpdateRequest;
@@ -70,17 +71,28 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. startDate/endDate는 YYYY-MM 형식.")
+    @Operation(summary = "지출 목록 조회", description = "월별·카테고리 필터 + 페이지네이션. is_excluded=false 건만 반환. month 또는 startDate/endDate는 YYYY-MM 형식.")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ExpenseListItemDto>>> getExpenses(
+            @RequestParam(required = false) String month,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) String categoryType,
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지는 0 이상이어야 합니다") int page,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다") @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다") int size,
             Authentication authentication) {
 
         Long userId = (Long) authentication.getPrincipal();
+
+        if (month != null && !month.isBlank()) {
+            if (!MONTH_PATTERN.matcher(month).matches()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("month 형식은 YYYY-MM 이어야 합니다.", "INVALID_DATE_FORMAT"));
+            }
+            startDate = month;
+            endDate = month;
+        }
 
         if (startDate != null && !MONTH_PATTERN.matcher(startDate).matches()) {
             return ResponseEntity.badRequest()
@@ -96,6 +108,22 @@ public class ExpenseController {
                     .body(ApiResponse.error("카테고리 ID는 1~11 사이여야 합니다.", "INVALID_CATEGORY_ID"));
         }
 
+        CategoryType parsedCategoryType = null;
+        if (categoryType != null && !categoryType.isBlank()) {
+            try {
+                parsedCategoryType = CategoryType.valueOf(categoryType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("categoryType은 FIXED, VARIABLE, ETC 중 하나여야 합니다.", "INVALID_CATEGORY_TYPE"));
+            }
+        }
+
+        LocalDate start = startDate != null
+                ? YearMonth.parse(startDate, MONTH_FMT).atDay(1)
+                : LocalDate.now().minusMonths(3).withDayOfMonth(1);
+        LocalDate end = endDate != null
+                ? YearMonth.parse(endDate, MONTH_FMT).atEndOfMonth()
+                : LocalDate.now();
         LocalDate start;
         LocalDate end;
         try {
@@ -111,7 +139,7 @@ public class ExpenseController {
         }
 
         PageResponse<ExpenseListItemDto> result = expenseQueryService.getExpenses(
-                userId, start, end, categoryId, PageRequest.of(page, size));
+                userId, start, end, categoryId, parsedCategoryType, PageRequest.of(page, size));
 
         return ResponseEntity.ok(ApiResponse.success(result));
     }

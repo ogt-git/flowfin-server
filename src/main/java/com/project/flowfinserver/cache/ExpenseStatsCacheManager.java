@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 // expense:stats:{userId}:{yyyy-MM}  TTL: 3600초
@@ -46,6 +47,14 @@ public class ExpenseStatsCacheManager {
     /** 지출 데이터 변경 시 반드시 호출 (INSERT / 카테고리 수정 / is_excluded 변경) */
     public void evict(Long userId, String month) {
         redisTemplate.delete(buildKey(userId, month));
+    }
+
+    /** 카드 연동 해제 등 전체 삭제 시 해당 사용자의 모든 월 캐시를 일괄 무효화 */
+    public void evictAllForUser(Long userId) {
+        Set<String> keys = redisTemplate.keys(KEY_PREFIX + userId + ":*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     private String buildKey(Long userId, String month) {

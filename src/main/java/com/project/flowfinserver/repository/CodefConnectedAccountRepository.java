@@ -17,9 +17,11 @@ public interface CodefConnectedAccountRepository extends JpaRepository<CodefConn
 
     List<CodefConnectedAccount> findAllByIsActiveTrue();
 
-    boolean existsByUserIdAndOrganizationCodeAndAccountType(Long userId, String organizationCode, AccountType accountType);
+    boolean existsByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveTrue(Long userId, String organizationCode, AccountType accountType);
 
     Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountType(Long userId, String organizationCode, AccountType accountType);
+
+    Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveFalse(Long userId, String organizationCode, AccountType accountType);
 
     void deleteAllByUserId(Long userId);
 }

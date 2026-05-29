@@ -2,6 +2,7 @@ package com.project.flowfinserver.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.flowfinserver.cache.ExpenseStatsCacheManager;
 import com.project.flowfinserver.codef.CodefApiClient;
 import com.project.flowfinserver.domain.AccountType;
 import com.project.flowfinserver.domain.CodefConnectedAccount;
@@ -10,7 +11,10 @@ import com.project.flowfinserver.dto.codef.CodefConnectRequest;
 import com.project.flowfinserver.dto.codef.CodefStockRequest;
 import com.project.flowfinserver.exception.CodefAccountNotFoundException;
 import com.project.flowfinserver.exception.CodefApiException;
+import com.project.flowfinserver.repository.AssetAccountRepository;
+import com.project.flowfinserver.repository.AssetItemRepository;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
+import com.project.flowfinserver.repository.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +45,10 @@ public class CodefService {
     private final CodefConnectedAccountRepository connectedAccountRepository;
     private final CodefSyncService codefSyncService;
     private final ObjectMapper objectMapper;
+    private final ExpenseRepository expenseRepository;
+    private final AssetAccountRepository assetAccountRepository;
+    private final AssetItemRepository assetItemRepository;
+    private final ExpenseStatsCacheManager expenseStatsCacheManager;
 
     // self-injection: @Async는 Spring 프록시를 통해야 동작 — 동일 클래스 내 직접 호출 시 비동기 미적용 방지
     @Lazy
@@ -123,25 +131,31 @@ public class CodefService {
 
             for (JsonNode account : successList) {
                 String organization = account.path("organization").asText();
-                if (!connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountType(
+
+                // 이미 활성화된 연동이 있으면 skip
+                if (connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveTrue(
                         userId, organization, accountType)) {
-                    CodefConnectedAccount conn =
-                            CodefConnectedAccount.create(userId, connectedId, organization, accountType);
-                    // STOCK 타입이고 계좌번호가 제공된 경우 즉시 저장 (AesEncryptConverter 자동 암호화)
-                    if (accountType == AccountType.STOCK && hasValue(request.getAccountNumber())) {
-                        conn.updateAccountNumber(request.getAccountNumber());
-                    }
-                    CodefConnectedAccount saved = connectedAccountRepository.save(conn);
-                    log.info("[Connect] saved connectedId for org={} type={}", organization, accountType);
-                    // 최초 동기화 비동기 트리거 — 즉시 200 OK 반환 후 별도 스레드에서 실행
-                    // try-catch: @Async 실패 시에도 connectAccount 응답에 영향 없도록 격리
-                    try {
-                        self.triggerInitialSync(userId, saved);
-                    } catch (Exception e) {
-                        log.warn("[Connect] 최초 동기화 트리거 실패 — 응답에는 영향 없음 userId={} org={}", userId, organization, e);
-                    }
-                } else {
-                    log.info("[Connect] already exists for org={} type={}", organization, accountType);
+                    log.info("[Connect] already active for org={} type={}", organization, accountType);
+                    continue;
+                }
+
+                // 해제(inactive) 상태 레코드가 있으면 재활성화, 없으면 새로 생성
+                CodefConnectedAccount conn = connectedAccountRepository
+                        .findByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveFalse(userId, organization, accountType)
+                        .orElseGet(() -> CodefConnectedAccount.create(userId, connectedId, organization, accountType));
+
+                conn.reactivate(connectedId);
+                if (accountType == AccountType.STOCK && hasValue(request.getAccountNumber())) {
+                    conn.updateAccountNumber(request.getAccountNumber());
+                }
+                CodefConnectedAccount saved = connectedAccountRepository.save(conn);
+                log.info("[Connect] saved/reactivated connectedId for org={} type={}", organization, accountType);
+
+                // 최초 동기화 비동기 트리거 — 즉시 200 OK 반환 후 별도 스레드에서 실행
+                try {
+                    self.triggerInitialSync(userId, saved);
+                } catch (Exception e) {
+                    log.warn("[Connect] 최초 동기화 트리거 실패 — 응답에는 영향 없음 userId={} org={}", userId, organization, e);
                 }
             }
         }
@@ -183,6 +197,20 @@ public class CodefService {
         }
 
         connection.deactivate();
+
+        if (connection.getAccountType() == AccountType.CARD) {
+            expenseRepository.deleteAllByUserIdAndCardCompany(userId, connection.getOrganizationCode());
+            expenseStatsCacheManager.evictAllForUser(userId);
+            log.info("[Disconnect] 카드 지출 삭제 완료 userId={} org={}", userId, connection.getOrganizationCode());
+        } else if (connection.getAccountType() == AccountType.STOCK) {
+            assetAccountRepository.findByUserIdAndBrokerCode(userId, connection.getOrganizationCode())
+                    .ifPresent(account -> {
+                        assetItemRepository.deleteByAccountId(account.getId().longValue());
+                        assetAccountRepository.delete(account);
+                        log.info("[Disconnect] 증권 자산 삭제 완료 userId={} org={}", userId, connection.getOrganizationCode());
+                    });
+        }
+
         log.info("[Disconnect] connectionId={} userId={} deactivated", connectionId, userId);
     }
 

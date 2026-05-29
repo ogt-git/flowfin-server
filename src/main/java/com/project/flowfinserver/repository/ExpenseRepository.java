@@ -1,9 +1,11 @@
 package com.project.flowfinserver.repository;
 
+import com.project.flowfinserver.domain.CategoryType;
 import com.project.flowfinserver.domain.Expense;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -30,18 +32,34 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
             "AND e.isExcluded = false " +
             "AND e.expenseDate BETWEEN :start AND :end " +
             "AND (:categoryId IS NULL OR e.category.id = :categoryId) " +
+            "AND (:categoryType IS NULL OR e.category.type = :categoryType) " +
             "ORDER BY e.expenseDate DESC",
             countQuery = "SELECT COUNT(e) FROM Expense e " +
                     "WHERE e.userId = :userId " +
                     "AND e.isExcluded = false " +
                     "AND e.expenseDate BETWEEN :start AND :end " +
-                    "AND (:categoryId IS NULL OR e.category.id = :categoryId)")
+                    "AND (:categoryId IS NULL OR e.category.id = :categoryId) " +
+                    "AND (:categoryType IS NULL OR e.category.type = :categoryType)")
     Page<Expense> findExpenses(
             @Param("userId") Long userId,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("categoryId") Long categoryId,
+            @Param("categoryType") CategoryType categoryType,
             Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(e.amount), 0) FROM Expense e " +
+            "WHERE e.userId = :userId " +
+            "AND e.isExcluded = false " +
+            "AND e.expenseDate BETWEEN :start AND :end " +
+            "AND (:categoryId IS NULL OR e.category.id = :categoryId) " +
+            "AND (:categoryType IS NULL OR e.category.type = :categoryType)")
+    Long sumAmounts(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("categoryId") Long categoryId,
+            @Param("categoryType") CategoryType categoryType);
 
     Optional<Expense> findByIdAndUserId(Long id, Long userId);
 
@@ -69,4 +87,9 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
                                @Param("startOfDay") LocalDateTime startOfDay);
 
     void deleteAllByUserId(Long userId);
+
+    @Modifying
+    @Query("DELETE FROM Expense e WHERE e.userId = :userId AND e.cardCompany = :cardCompany")
+    void deleteAllByUserIdAndCardCompany(@Param("userId") Long userId,
+                                         @Param("cardCompany") String cardCompany);
 }

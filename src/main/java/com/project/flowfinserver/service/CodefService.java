@@ -145,9 +145,9 @@ public class CodefService {
                         .orElseGet(() -> CodefConnectedAccount.create(userId, connectedId, organization, accountType));
 
                 conn.reactivate(connectedId);
-                if (accountType == AccountType.STOCK && hasValue(request.getAccountNumber())) {
-                    conn.updateAccountNumber(request.getAccountNumber());
-                }
+                // STOCK: 증권 계좌번호/비밀번호 / CARD(0455·0301): 카드번호/비밀번호 — 동일 컬럼 재활용
+                if (hasValue(request.getAccountNumber()))   conn.updateAccountNumber(request.getAccountNumber());
+                if (hasValue(request.getAccountPassword())) conn.updateAccountPassword(request.getAccountPassword());
                 CodefConnectedAccount saved = connectedAccountRepository.save(conn);
                 log.info("[Connect] saved/reactivated connectedId for org={} type={}", organization, accountType);
 
@@ -369,4 +369,5 @@ public class CodefService {
     private boolean hasValue(String s) {
         return s != null && !s.isBlank();
     }
+
 }

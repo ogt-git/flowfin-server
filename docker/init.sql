@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS codef_connection (
     organization_code VARCHAR(100) NOT NULL,
     account_type      VARCHAR(10)  NOT NULL COMMENT 'CARD | STOCK',
     account_number    VARCHAR(50),
+    account_password  VARCHAR(255) COMMENT 'STOCK 계좌 비밀번호 (AES-256 암호화)',
     is_active         TINYINT(1)   NOT NULL DEFAULT 1,
     created_at        DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)

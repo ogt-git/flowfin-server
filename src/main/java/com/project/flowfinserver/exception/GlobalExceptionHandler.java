@@ -128,6 +128,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("[" + e.getCodefCode() + "] " + e.getMessage(), ErrorCode.CODEF_SYNC_FAILED.name()));
     }
 
+    // 카드 추가 인증 필요 (CF-12108 / CF-12401) — 422 Unprocessable Entity
+    @ExceptionHandler(CodefCardAuthRequiredException.class)
+    public ResponseEntity<ApiResponse<?>> handleCodefCardAuth(CodefCardAuthRequiredException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiResponse.error(e.getMessage(), e.getCodefCode()));
+    }
+
     // 제외 처리된 지출 카테고리 수정 시도 등 잘못된 상태 전환 → 400
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {

@@ -345,6 +345,12 @@ public class CodefSyncService {
      * - RATE_LIMIT: 경고 로그만 기록, skip
      */
     private void handleCodefError(String errorCode, String message, CodefConnectedAccount conn) throws Exception {
+        // 카드 추가 인증 필요 — is_active 변경 없이 422로 응답
+        if ("CF-12108".equals(errorCode) || "CF-12401".equals(errorCode)) {
+            log.warn("[CodefError] 카드 추가 인증 필요 code={} connectionId={}", errorCode, conn.getId());
+            throw new CodefCardAuthRequiredException(errorCode);
+        }
+
         CodefErrorType type = CodefErrorClassifier.classify(errorCode);
         log.warn("[CodefError] code={} type={} connectionId={}", errorCode, type, conn.getId());
 
@@ -433,6 +439,16 @@ public class CodefSyncService {
                 params.put("organization", org);
                 params.put("startDate", startDate);
 
+                // 카드 인증 정보 — account_number/account_password를 CARD 타입에서 카드번호/비밀번호로 재활용
+                String cardNo = account.getAccountNumber();
+                String cardPw = account.getAccountPassword();
+                if (cardNo != null && !cardNo.isBlank()) {
+                    params.put("cardNo", cardNo);
+                }
+                if (cardPw != null && !cardPw.isBlank()) {
+                    params.put("cardPassword", codefApiClient.encryptRSA(cardPw));
+                }
+
                 String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
                 JsonNode root = objectMapper.readTree(response);
 
@@ -480,6 +496,9 @@ public class CodefSyncService {
             params.put("connectedId", account.getConnectedId());
             params.put("organization", account.getOrganizationCode());
             params.put("account", account.getAccountNumber());
+            if (account.getAccountPassword() != null && !account.getAccountPassword().isBlank()) {
+                params.put("accountPassword", codefApiClient.encryptRSA(account.getAccountPassword()));
+            }
 
             String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
             JsonNode root = objectMapper.readTree(response);

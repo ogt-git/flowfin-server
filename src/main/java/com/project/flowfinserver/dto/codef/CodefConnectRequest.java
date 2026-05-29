@@ -24,6 +24,9 @@ public class CodefConnectRequest {
     private String password;   // 인증서 방식: 인증서 비밀번호 / 아이디 방식: 계정 비밀번호
     private String birthDate;  // 선택 (아이디 방식 일부 기관)
 
-    // 증권 계좌번호 (businessType=ST이면 필수, CD이면 null) — CODEF 연동 완료 후 즉시 저장
+    // 카드번호(0455·0301) 또는 증권 계좌번호 — account_number 컬럼에 통합 저장
     private String accountNumber;
+
+    // 카드 비밀번호(0455·0301) 또는 증권 계좌 비밀번호 — account_password 컬럼에 통합 저장
+    private String accountPassword;
 }

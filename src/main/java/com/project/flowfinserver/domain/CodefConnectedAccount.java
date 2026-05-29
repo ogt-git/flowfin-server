@@ -37,6 +37,10 @@ public class CodefConnectedAccount {
     @Column(name = "account_number", length = 50)
     private String accountNumber;
 
+    @Convert(converter = AesEncryptConverter.class)
+    @Column(name = "account_password", length = 255)
+    private String accountPassword;
+
     @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
     private boolean isActive;
 
@@ -66,5 +70,9 @@ public class CodefConnectedAccount {
 
     public void updateAccountNumber(String accountNumber) {
         this.accountNumber = accountNumber;
+    }
+
+    public void updateAccountPassword(String accountPassword) {
+        this.accountPassword = accountPassword;
     }
 }

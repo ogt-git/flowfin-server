@@ -33,7 +33,8 @@ public class AuthService {
                 emailHash,
                 passwordEncoder.encode(request.getPassword()),
                 request.getName(),
-                request.getRiskType()
+                request.getRiskType(),
+                request.getTermsVersion()
         );
 
         userRepository.save(user);

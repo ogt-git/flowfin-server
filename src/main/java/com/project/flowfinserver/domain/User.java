@@ -48,17 +48,22 @@ public class User {
     @Column(name = "risk_type", length = 50)
     private RiskType riskType;
 
+    @Column(name = "terms_version", nullable = false, length = 20)
+    private String termsVersion;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    public static User create(String email, String emailHash, String password, String name, RiskType riskType) {
+    public static User create(String email, String emailHash, String password, String name, RiskType riskType,
+                              String termsVersion) {
         User user = new User();
         user.email = email;
         user.emailHash = emailHash;
         user.password = password;
         user.name = name;
         user.riskType = riskType;
+        user.termsVersion = termsVersion;
         return user;
     }
 

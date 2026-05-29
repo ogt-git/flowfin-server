@@ -3,7 +3,6 @@ package com.project.flowfinserver.dto;
 import com.project.flowfinserver.domain.RiskType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -29,4 +28,7 @@ public class SignupRequest {
     private String name;
 
     private RiskType riskType;
+
+    @NotBlank(message = "약관 버전을 입력해주세요")
+    private String termsVersion;
 }

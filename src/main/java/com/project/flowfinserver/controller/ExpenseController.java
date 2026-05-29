@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
 @RestController
 @RequestMapping("/api/expenses")
 @RequiredArgsConstructor
-public class ExpenseController {
+public class ExpenseController {    
 
     private static final Pattern MONTH_PATTERN = Pattern.compile("^\\d{4}-\\d{2}$");
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");

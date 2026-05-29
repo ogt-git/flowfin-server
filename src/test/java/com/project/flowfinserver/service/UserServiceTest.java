@@ -51,7 +51,7 @@ class UserServiceTest {
     private static final Long USER_ID = 1L;
 
     private User makeUser() {
-        return User.create("encrypted@example.com", "hash123", "encodedPwd", "테스트유저", RiskType.MODERATE);
+        return User.create("encrypted@example.com", "hash123", "encodedPwd", "테스트유저", RiskType.MODERATE, "1.0");
     }
 
     // ==================== getMyProfile ====================

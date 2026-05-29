@@ -31,7 +31,7 @@ public class UserController {
     @Operation(summary = "프로필 수정", description = "이름과 투자 성향을 수정합니다.")
     @PatchMapping("/me")
     public ResponseEntity<ApiResponse<Void>> updateProfile(
-            @RequestBody UpdateProfileRequest request,
+            @Valid @RequestBody UpdateProfileRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         userService.updateProfile(userId, request);

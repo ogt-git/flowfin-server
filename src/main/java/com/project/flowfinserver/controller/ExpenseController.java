@@ -13,10 +13,13 @@ import com.project.flowfinserver.service.ExpenseStatsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -28,6 +31,7 @@ import java.util.regex.Pattern;
 
 
 @Tag(name = "Expense", description = "지출 내역 조회 및 카테고리 수정 API")
+@Validated
 @RestController
 @RequestMapping("/api/expenses")
 @RequiredArgsConstructor
@@ -75,8 +79,8 @@ public class ExpenseController {
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) Integer categoryId,
             @RequestParam(required = false) String categoryType,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지는 0 이상이어야 합니다") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다") @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다") int size,
             Authentication authentication) {
 
         Long userId = (Long) authentication.getPrincipal();
@@ -120,6 +124,19 @@ public class ExpenseController {
         LocalDate end = endDate != null
                 ? YearMonth.parse(endDate, MONTH_FMT).atEndOfMonth()
                 : LocalDate.now();
+        LocalDate start;
+        LocalDate end;
+        try {
+            start = startDate != null
+                    ? YearMonth.parse(startDate, MONTH_FMT).atDay(1)
+                    : LocalDate.now().withDayOfMonth(1);
+            end = endDate != null
+                    ? YearMonth.parse(endDate, MONTH_FMT).atEndOfMonth()
+                    : LocalDate.now();
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("날짜 형식이 올바르지 않습니다 (YYYY-MM)", "INVALID_DATE_FORMAT"));
+        }
 
         PageResponse<ExpenseListItemDto> result = expenseQueryService.getExpenses(
                 userId, start, end, categoryId, parsedCategoryType, PageRequest.of(page, size));

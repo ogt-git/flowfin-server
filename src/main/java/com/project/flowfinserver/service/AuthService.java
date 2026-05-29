@@ -2,6 +2,8 @@ package com.project.flowfinserver.service;
 
 import com.project.flowfinserver.domain.User;
 import com.project.flowfinserver.dto.*;
+import com.project.flowfinserver.exception.AuthException;
+import com.project.flowfinserver.exception.DuplicateEmailException;
 import com.project.flowfinserver.jwt.JwtUtil;
 import com.project.flowfinserver.repository.UserRepository;
 import com.project.flowfinserver.util.AesEncryptionUtil;
@@ -23,7 +25,7 @@ public class AuthService {
     public void signup(SignupRequest request) {
         String emailHash = encryptionUtil.hash(request.getEmail());
         if (userRepository.existsByEmailHash(emailHash)) {
-            throw new RuntimeException("이미 존재하는 이메일입니다.");
+            throw new DuplicateEmailException("이미 사용 중인 이메일입니다. 다른 이메일을 사용해주세요.");
         }
 
         User user = User.create(
@@ -40,10 +42,10 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         String emailHash = encryptionUtil.hash(request.getEmail());
         User user = userRepository.findByEmailHash(emailHash)
-                .orElseThrow(() -> new RuntimeException("존재하지 않는 이메일입니다."));
+                .orElseThrow(() -> new AuthException("이메일 또는 비밀번호가 올바르지 않습니다."));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("비밀번호가 일치하지 않습니다.");
+            throw new AuthException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
         String accessToken  = jwtUtil.generateAccessToken(user.getEmail(), user.getId());

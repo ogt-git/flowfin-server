@@ -3,6 +3,7 @@ package com.project.flowfinserver.controller;
 import com.project.flowfinserver.dto.CommentRequest;
 import com.project.flowfinserver.dto.CommentResponse;
 import com.project.flowfinserver.service.CommentService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -25,7 +26,7 @@ public class CommentController {
     @PostMapping
     public ResponseEntity<CommentResponse> createComment(
             @PathVariable Long communityId,
-            @RequestBody CommentRequest request,
+            @Valid @RequestBody CommentRequest request,
             Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ResponseEntity.ok(commentService.createComment(communityId, request, userId));

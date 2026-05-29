@@ -78,17 +78,18 @@ class InvestableAmountCalculationTest {
         given(fixedCat.getId()).willReturn(1L);
         given(categoryRepository.findByType(CategoryType.FIXED)).willReturn(List.of(fixedCat));
 
-        // 1개월치 고정비 데이터 — 600,000 / 3개월 = 200,000 평균
+        // 1개월치 데이터(minusDays(15)), months=1, 월평균=200,000
+        // 비상금=200,000 → raw = 1,500,000 - 200,000 - 200,000 = 1,100,000
         Expense exp1 = mock(Expense.class);
-        given(exp1.getAmount()).willReturn(600_000L);
-        given(exp1.getExpenseDate()).willReturn(LocalDateTime.now().minusMonths(3).plusDays(1));
+        given(exp1.getAmount()).willReturn(200_000L);
+        given(exp1.getExpenseDate()).willReturn(LocalDateTime.now().minusDays(15));
         given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
                 .willReturn(List.of(exp1));
 
         InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);
 
         assertThat(result.assetLinked()).isTrue();
-        assertThat(result.amount()).isPositive();
+        assertThat(result.amount()).isEqualTo(1_100_000L);
         assertThat(result.zeroReason()).isEqualTo(ZeroReason.NONE);
         assertThat(result.fixedCostMissing()).isFalse();
     }
@@ -187,6 +188,75 @@ class InvestableAmountCalculationTest {
 
         assertThat(result.fixedCostMissing()).isTrue();
         assertThat(result.amount()).isEqualTo(500_000L);
+    }
+
+    // ==================== 3개월 미만 데이터 → 가용 기간 평균 ====================
+
+    @Test
+    @DisplayName("고정비 데이터가 2개월치뿐이면 가용 기간(2개월) 평균으로 월 고정비를 산출한다")
+    void calculateInvestableAmount_twoMonthData_usesTwoMonthAverage() {
+        // 예수금 600,000 — 유동수동 없음
+        // 고정비 2건 합계 400,000, earliest = 2개월 + 1일 전
+        // months = MONTHS.between(2개월+1일 전, 오늘) = 2
+        // fixedMonthlyAvg = 400,000 / 2 = 200,000, 비상금 = 200,000
+        // raw = 600,000 - 200,000 - 200,000 = 200,000
+        AssetAccount account = AssetAccount.create(USER_ID, "0240", "acc1", 1_000_000L, 600_000L);
+        given(assetAccountRepository.findAllByUserId(USER_ID)).willReturn(List.of(account));
+        given(manualAssetRepository.findByUserIdAndAssetTypeIn(anyLong(), anyList())).willReturn(List.of());
+
+        Category fixedCat = mock(Category.class);
+        given(fixedCat.getId()).willReturn(1L);
+        given(categoryRepository.findByType(CategoryType.FIXED)).willReturn(List.of(fixedCat));
+
+        Expense recent = mock(Expense.class);
+        given(recent.getAmount()).willReturn(200_000L);
+        given(recent.getExpenseDate()).willReturn(LocalDateTime.now().minusDays(15));
+
+        Expense older = mock(Expense.class);
+        given(older.getAmount()).willReturn(200_000L);
+        // 2개월 + 1일 전: MONTHS.between(today - 2m1d, today) = 2 보장
+        given(older.getExpenseDate()).willReturn(LocalDateTime.now().minusMonths(2).minusDays(1));
+
+        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
+                .willReturn(List.of(recent, older));
+
+        InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);
+
+        assertThat(result.assetLinked()).isTrue();
+        assertThat(result.amount()).isEqualTo(200_000L);
+        assertThat(result.fixedCostMissing()).isFalse();
+        assertThat(result.zeroReason()).isEqualTo(ZeroReason.NONE);
+    }
+
+    // ==================== 비상금 미설정 → 고정비 1개월치 기본 적용 ====================
+
+    @Test
+    @DisplayName("비상금 미설정 시 고정비 1개월치가 비상금 기본값으로 적용된다 (CLAUDE.md 5.3)")
+    void calculateInvestableAmount_emergencyFundDefaultsToOneMonthFixedCost() {
+        // 예수금 800,000 — 유동수동 없음
+        // 고정비 1개월치 200,000 (minusDays(15), months=1)
+        // 비상금 = fixedMonthlyAvg = 200,000 (사용자 미설정 → 고정비 1개월치 기본값)
+        // raw = 800,000 - 200,000 - 200,000 = 400,000
+        AssetAccount account = AssetAccount.create(USER_ID, "0240", "acc1", 1_000_000L, 800_000L);
+        given(assetAccountRepository.findAllByUserId(USER_ID)).willReturn(List.of(account));
+        given(manualAssetRepository.findByUserIdAndAssetTypeIn(anyLong(), anyList())).willReturn(List.of());
+
+        Category fixedCat = mock(Category.class);
+        given(fixedCat.getId()).willReturn(1L);
+        given(categoryRepository.findByType(CategoryType.FIXED)).willReturn(List.of(fixedCat));
+
+        Expense exp = mock(Expense.class);
+        given(exp.getAmount()).willReturn(200_000L);
+        given(exp.getExpenseDate()).willReturn(LocalDateTime.now().minusDays(15));
+        given(expenseRepository.findByUserIdAndCategoryIdInAndExpenseDateAfterAndIsExcludedFalse(anyLong(), anyList(), any()))
+                .willReturn(List.of(exp));
+
+        InvestableAmountResult result = assetService.calculateInvestableAmount(USER_ID);
+
+        // fixedMonthlyAvg = 200,000, emergencyFund = 200,000
+        assertThat(result.amount()).isEqualTo(400_000L);
+        assertThat(result.fixedCostMissing()).isFalse();
+        assertThat(result.zeroReason()).isEqualTo(ZeroReason.NONE);
     }
 
     // ==================== 결과 음수 → 0 clamp ====================

@@ -78,7 +78,8 @@
       "Bash(grep -i \"springdoc\\\\|openapi\" build.gradle)",
       "Bash(grep -i \"springdoc\\\\|openapi\" pom.xml)",
       "Bash(grep -E \"\\\\\\\\.java$\")",
-      "Bash(./gradlew.bat compileJava *)"
+      "Bash(./gradlew.bat compileJava *)",
+      "Bash(grep -i \"\\\\.java$\")"
     ]
   }
 }

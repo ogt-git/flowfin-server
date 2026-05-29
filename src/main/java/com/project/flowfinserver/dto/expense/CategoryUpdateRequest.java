@@ -10,6 +10,6 @@ import lombok.Setter;
 @NoArgsConstructor
 public class CategoryUpdateRequest {
 
-    @NotNull(message = "카테고리 ID는 필수입니다.")
+    @NotNull(message = "카테고리 ID는 필수입니다")
     private Long categoryId;
 }

@@ -7,6 +7,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ErrorCode {
 
+    // 인증
+    AUTH_FAILED(401, "인증에 실패했습니다"),
+    DUPLICATE_EMAIL(409, "이미 사용 중인 이메일입니다"),
+
     // 지출
     DUPLICATE_EXPENSE(409, "중복된 지출 내역입니다"),
 

@@ -52,7 +52,8 @@ public class CommunityService {
         }
 
         return posts.stream()
-                .map(post -> new CommunityResponse(post, resolveAuthorName(post.getUserId())))
+                .map(post -> new CommunityResponse(post, resolveAuthorName(post.getUserId()),
+                        commentRepository.countByCommunityId(post.getId())))
                 .toList();
     }
 
@@ -61,13 +62,14 @@ public class CommunityService {
         Community community = communityRepository.findById(id)
                 .orElseThrow(() -> new CommunityNotFoundException(id));
         community.increaseViews();
-        return new CommunityResponse(community, resolveAuthorName(community.getUserId()));
+        return new CommunityResponse(community, resolveAuthorName(community.getUserId()),
+                commentRepository.countByCommunityId(id));
     }
 
     @Transactional
     public CommunityResponse createPost(CommunityRequest request, Long userId) {
         Community community = Community.create(userId, request.getTitle(), request.getContent(), request.getCategory());
-        return new CommunityResponse(communityRepository.save(community), resolveAuthorName(userId));
+        return new CommunityResponse(communityRepository.save(community), resolveAuthorName(userId), 0);
     }
 
     @Transactional
@@ -80,7 +82,8 @@ public class CommunityService {
         }
 
         community.update(request.getTitle(), request.getContent());
-        return new CommunityResponse(community, resolveAuthorName(userId));
+        return new CommunityResponse(community, resolveAuthorName(userId),
+                commentRepository.countByCommunityId(id));
     }
 
     @Transactional
@@ -122,6 +125,6 @@ public class CommunityService {
 
         String title = request.getTitle() != null ? request.getTitle() : "포트폴리오를 공유합니다.";
         Community community = Community.create(userId, title, content, "PORTFOLIO");
-        return new CommunityResponse(communityRepository.save(community), resolveAuthorName(userId));
+        return new CommunityResponse(communityRepository.save(community), resolveAuthorName(userId), 0);
     }
 }

@@ -31,13 +31,23 @@ public class ExpenseQueryService {
             CategoryType categoryType,
             Pageable pageable) {
 
+        Long categoryIdLong = categoryId != null ? categoryId.longValue() : null;
+
+        if (startDate == null && endDate == null) {
+            Page<Expense> expensePage = expenseRepository.findAllExpenses(
+                    userId, categoryIdLong, categoryType, pageable);
+            List<ExpenseListItemDto> items = expensePage.getContent().stream()
+                    .map(e -> ExpenseListItemDto.from(e, e.getCategory()))
+                    .collect(Collectors.toList());
+            return PageResponse.of(expensePage, items, null);
+        }
+
         if (startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("조회 시작일은 종료일보다 이전이어야 합니다.");
         }
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(23, 59, 59);
-        Long categoryIdLong = categoryId != null ? categoryId.longValue() : null;
 
         Page<Expense> expensePage = expenseRepository.findExpenses(
                 userId, start, end, categoryIdLong, categoryType, pageable);

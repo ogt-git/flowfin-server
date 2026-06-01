@@ -39,6 +39,13 @@ public interface ExpenseStatsRepository extends Repository<Expense, Long> {
             @Param("userId") Long userId,
             @Param("month") String month);
 
+    // 데이터가 있는 가장 최근 월 반환 (없으면 null)
+    @Query("SELECT FUNCTION('DATE_FORMAT', MAX(e.expenseDate), '%Y-%m') " +
+           "FROM Expense e " +
+           "WHERE e.userId = :userId " +
+           "AND e.isExcluded = false")
+    String findLatestExpenseMonth(@Param("userId") Long userId);
+
     // AI 분류 대기 건수 — 0보다 크면 stats가 아직 incomplete 상태
     @Query("SELECT COUNT(e) " +
            "FROM Expense e " +

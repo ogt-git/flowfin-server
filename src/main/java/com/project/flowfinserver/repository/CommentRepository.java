@@ -11,6 +11,8 @@ import java.util.List;
 public interface CommentRepository extends JpaRepository<Comment, Long> {
     List<Comment> findByCommunityIdOrderByCreatedAtAsc(Long communityId);
 
+    int countByCommunityId(Long communityId);
+
     @Modifying
     @Query("DELETE FROM Comment c WHERE c.communityId = :communityId")
     void deleteAllByCommunityId(@Param("communityId") Long communityId);

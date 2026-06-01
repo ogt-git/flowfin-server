@@ -86,6 +86,10 @@ public class ExpenseStatsService {
         return response;
     }
 
+    public String findLatestMonth(Long userId) {
+        return expenseStatsRepository.findLatestExpenseMonth(userId);
+    }
+
     // Expense INSERT 또는 is_excluded 변경 시 호출하여 캐시 무효화
     public void evictCache(Long userId, String month) {
         cacheManager.evict(userId, month);

@@ -53,7 +53,8 @@ public class ExpenseController {
         Long userId = (Long) authentication.getPrincipal();
 
         if (month == null || month.isBlank()) {
-            month = YearMonth.now().format(MONTH_FMT);
+            String latest = expenseStatsService.findLatestMonth(userId);
+            month = latest != null ? latest : YearMonth.now().format(MONTH_FMT);
         }
 
         if (!MONTH_PATTERN.matcher(month).matches()) {
@@ -121,12 +122,8 @@ public class ExpenseController {
         LocalDate start;
         LocalDate end;
         try {
-            start = startDate != null
-                    ? YearMonth.parse(startDate, MONTH_FMT).atDay(1)
-                    : LocalDate.now().withDayOfMonth(1);
-            end = endDate != null
-                    ? YearMonth.parse(endDate, MONTH_FMT).atEndOfMonth()
-                    : LocalDate.now();
+            start = startDate != null ? YearMonth.parse(startDate, MONTH_FMT).atDay(1) : null;
+            end   = endDate   != null ? YearMonth.parse(endDate,   MONTH_FMT).atEndOfMonth() : null;
         } catch (DateTimeParseException e) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("날짜 형식이 올바르지 않습니다 (YYYY-MM)", "INVALID_DATE_FORMAT"));

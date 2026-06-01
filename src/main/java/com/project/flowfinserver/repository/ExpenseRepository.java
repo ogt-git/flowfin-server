@@ -86,6 +86,24 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     long countNewExpensesSince(@Param("userId") Long userId,
                                @Param("startOfDay") LocalDateTime startOfDay);
 
+    @Query(value = "SELECT e FROM Expense e " +
+            "LEFT JOIN FETCH e.category " +
+            "WHERE e.userId = :userId " +
+            "AND e.isExcluded = false " +
+            "AND (:categoryId IS NULL OR e.category.id = :categoryId) " +
+            "AND (:categoryType IS NULL OR e.category.type = :categoryType) " +
+            "ORDER BY e.expenseDate DESC",
+            countQuery = "SELECT COUNT(e) FROM Expense e " +
+                    "WHERE e.userId = :userId " +
+                    "AND e.isExcluded = false " +
+                    "AND (:categoryId IS NULL OR e.category.id = :categoryId) " +
+                    "AND (:categoryType IS NULL OR e.category.type = :categoryType)")
+    Page<Expense> findAllExpenses(
+            @Param("userId") Long userId,
+            @Param("categoryId") Long categoryId,
+            @Param("categoryType") CategoryType categoryType,
+            Pageable pageable);
+
     void deleteAllByUserId(Long userId);
 
     @Modifying

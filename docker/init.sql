@@ -284,7 +284,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('유치원',          4, 'CONTAINS',  95),
 ('어린이집',        4, 'CONTAINS',  95),
 ('강의',            4, 'CONTAINS',  80),
-('수강',            4, 'CONTAINS',  80);
+('수강',            4, 'CONTAINS',  80),
 -- ============================================================
 -- 식비 (5) — 배달앱, 카페, 패스트푸드, 편의점, 외식 프랜차이즈
 -- ============================================================
@@ -513,7 +513,7 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('롯데아울렛',      8, 'CONTAINS', 85),
 ('패션',            8, 'CONTAINS', 70),
 ('의류',            8, 'CONTAINS',  80),
-('쇼핑몰',          8, 'CONTAINS',  70);
+('쇼핑몰',          8, 'CONTAINS',  70),
 
 -- ============================================================
 -- 문화여가비 (9) — OTT, 음악, 숙박, 영화관, 게임, 스포츠

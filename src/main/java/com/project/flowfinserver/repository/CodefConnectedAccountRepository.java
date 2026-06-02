@@ -17,11 +17,26 @@ public interface CodefConnectedAccountRepository extends JpaRepository<CodefConn
 
     List<CodefConnectedAccount> findAllByIsActiveTrue();
 
-    boolean existsByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveTrue(Long userId, String organizationCode, AccountType accountType);
+    // ID/PW 방식 (loginIdHash 존재) — 중복 활성 연동 확인
+    boolean existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
+            Long userId, String organizationCode, AccountType accountType, String loginIdHash);
+
+    // 인증서 방식 (loginIdHash IS NULL) — 중복 활성 연동 확인
+    boolean existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
+            Long userId, String organizationCode, AccountType accountType);
+
+    // ID/PW 방식 — 비활성 레코드 조회 (재활성화용)
+    Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveFalse(
+            Long userId, String organizationCode, AccountType accountType, String loginIdHash);
+
+    // 인증서 방식 — 비활성 레코드 조회 (재활성화용)
+    Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveFalse(
+            Long userId, String organizationCode, AccountType accountType);
 
     Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountType(Long userId, String organizationCode, AccountType accountType);
 
-    Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveFalse(Long userId, String organizationCode, AccountType accountType);
+    boolean existsByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveTrueAndIdNot(
+            Long userId, String organizationCode, AccountType accountType, Long excludeId);
 
     void deleteAllByUserId(Long userId);
 }

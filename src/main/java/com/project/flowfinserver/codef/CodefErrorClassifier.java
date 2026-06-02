@@ -18,7 +18,7 @@ public final class CodefErrorClassifier {
     private static final Set<String> TRANSIENT_ERROR_CODES = Set.of(
             "CF-01002", "CF-01004", "CF-01007", "CF-00016",
             "CF-01006", "CF-12003", "CF-12104", "CF-12703",
-            "CF-12201"  // 금융기관 서버 중복 로그인 세션 — 잠시 후 재시도하면 해소됨
+            "CF-12201", "CF-12701"
     );
 
     private static final Set<String> RATE_LIMIT_CODES = Set.of(

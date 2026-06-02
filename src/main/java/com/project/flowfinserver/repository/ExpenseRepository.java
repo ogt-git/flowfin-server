@@ -19,8 +19,8 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     List<Expense> findByUserIdAndExpenseDateBetween(Long userId, LocalDateTime from, LocalDateTime to);
 
-    boolean existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-            Long userId, LocalDateTime expenseDate, String merchantName, Long amount);
+    boolean existsByUserIdAndExpenseDateAndMerchantNameAndAmountAndUsedCard(
+            Long userId, LocalDateTime expenseDate, String merchantName, Long amount, String usedCard);
 
     List<Expense> findByUserIdAndCategoryIsNullOrderByExpenseDateDesc(Long userId);
 

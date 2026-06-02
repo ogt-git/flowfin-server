@@ -345,6 +345,12 @@ public class CodefSyncService {
      * - RATE_LIMIT: 경고 로그만 기록, skip
      */
     private void handleCodefError(String errorCode, String message, CodefConnectedAccount conn) throws Exception {
+        // 카드 추가 인증 필요 — is_active 변경 없이 422로 응답
+        if ("CF-12108".equals(errorCode) || "CF-12401".equals(errorCode)) {
+            log.warn("[CodefError] 카드 추가 인증 필요 code={} connectionId={}", errorCode, conn.getId());
+            throw new CodefCardAuthRequiredException(errorCode);
+        }
+
         CodefErrorType type = CodefErrorClassifier.classify(errorCode);
         log.warn("[CodefError] code={} type={} connectionId={}", errorCode, type, conn.getId());
 
@@ -433,27 +439,54 @@ public class CodefSyncService {
                 params.put("organization", org);
                 params.put("startDate", startDate);
 
-                String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
-                JsonNode root = objectMapper.readTree(response);
-
-                String resultCode = root.path("result").path("code").asText();
-                if (!CODEF_SUCCESS.equals(resultCode)) {
-                    String message = root.path("result").path("message").asText();
-                    handleCodefError(resultCode, message, account);
-                    return new int[]{totalSaved, totalSkipped};
+                // 카드 인증 정보 — account_number/account_password를 CARD 타입에서 카드번호/비밀번호로 재활용
+                String cardNo = account.getAccountNumber();
+                String cardPw = account.getAccountPassword();
+                if (cardNo != null && !cardNo.isBlank()) {
+                    params.put("cardNo", cardNo);
+                }
+                if (cardPw != null && !cardPw.isBlank()) {
+                    params.put("cardPassword", codefApiClient.encryptRSA(cardPw));
                 }
 
-                JsonNode data = root.path("data");
-                if (data.isArray()) {
-                    log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
-                } else {
-                    JsonNode txArray = data.path("resChargeHistoryList");
-                    if (txArray.isArray()) {
-                        int[] counts = saveExpensesFromTxArray(userId, org, txArray);
-                        totalSaved   += counts[0];
-                        totalSkipped += counts[1];
-                    } else {
-                        log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
+                boolean monthProcessed = false;
+                for (int attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
+                        JsonNode root = objectMapper.readTree(response);
+
+                        String resultCode = root.path("result").path("code").asText();
+                        if (!CODEF_SUCCESS.equals(resultCode)) {
+                            String message = root.path("result").path("message").asText();
+                            handleCodefError(resultCode, message, account);
+                            // RATE_LIMIT: handleCodefError가 throw 없이 반환 — 해당 달 스킵
+                            break;
+                        }
+
+                        JsonNode data = root.path("data");
+                        if (data.isArray()) {
+                            log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
+                        } else {
+                            JsonNode txArray = data.path("resChargeHistoryList");
+                            if (txArray.isArray()) {
+                                int[] counts = saveExpensesFromTxArray(userId, org, txArray);
+                                totalSaved   += counts[0];
+                                totalSkipped += counts[1];
+                            } else {
+                                log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
+                            }
+                        }
+                        monthProcessed = true;
+                        break;
+                    } catch (CodefRetryableException e) {
+                        if (attempt < 3) {
+                            log.warn("[CODEF Sync] 일시적 오류 재시도 {}/3 org={} startDate={} code={}",
+                                    attempt, org, startDate, e.getErrorCode());
+                        } else {
+                            log.warn("[CODEF Sync] 재시도 소진 — 해당 월 스킵 org={} startDate={} code={}",
+                                    org, startDate, e.getErrorCode());
+                        }
+                        // CodefApiException·CodefAuthException 등 비재시도 예외는 그대로 전파
                     }
                 }
                 cursor = cursor.plusMonths(1);
@@ -480,6 +513,9 @@ public class CodefSyncService {
             params.put("connectedId", account.getConnectedId());
             params.put("organization", account.getOrganizationCode());
             params.put("account", account.getAccountNumber());
+            if (account.getAccountPassword() != null && !account.getAccountPassword().isBlank()) {
+                params.put("accountPassword", codefApiClient.encryptRSA(account.getAccountPassword()));
+            }
 
             String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
             JsonNode root = objectMapper.readTree(response);
@@ -569,8 +605,6 @@ public class CodefSyncService {
         List<CardBillingDto> items = new ArrayList<>();
         for (JsonNode tx : txArray) {
             String paymentType = firstNonEmpty(tx, "resPaymentType");
-            // 단기/장기 카드대출은 지출이 아닌 대출상환 — 저장 제외
-            if ("4".equals(paymentType) || "5".equals(paymentType)) continue;
 
             String dateStr = firstNonEmpty(tx, "resUsedDate");
             // resUsedDate 미제공 시 결제예정일로 대체 (KB 할인혜택, 현대 이월약정, 신한 연회비 등)

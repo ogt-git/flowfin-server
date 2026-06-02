@@ -41,8 +41,8 @@ class ManualAssetServiceTest {
     @Test
     @DisplayName("save — 신규 수동자산 저장 후 updateInvestableAmount 호출")
     void save_저장후_investable_amount_갱신() {
-        ManualAssetRequest req = new ManualAssetRequest(ManualAssetType.CASH, 500_000L, "지갑 현금");
-        ManualAsset saved = ManualAsset.create(USER_ID, ManualAssetType.CASH, 500_000L, "지갑 현금");
+        ManualAssetRequest req = new ManualAssetRequest(ManualAssetType.CASH, "지갑 현금", null, 500_000L, null, null);
+        ManualAsset saved = ManualAsset.create(USER_ID, ManualAssetType.CASH, "지갑 현금", null, 500_000L, null, null);
         ReflectionTestUtils.setField(saved, "id", 1L);
         given(manualAssetRepository.save(any(ManualAsset.class))).willReturn(saved);
 
@@ -61,11 +61,11 @@ class ManualAssetServiceTest {
     @Test
     @DisplayName("update — 본인 자산 수정 후 investable_amount 갱신")
     void update_본인자산_수정_후_investable_갱신() {
-        ManualAsset existing = ManualAsset.create(USER_ID, ManualAssetType.CASH, 300_000L, "기존");
+        ManualAsset existing = ManualAsset.create(USER_ID, ManualAssetType.CASH, "기존", null, 300_000L, null, null);
         ReflectionTestUtils.setField(existing, "id", 1L);
         given(manualAssetRepository.findById(1L)).willReturn(Optional.of(existing));
 
-        ManualAssetRequest req = new ManualAssetRequest(ManualAssetType.DEPOSIT, 1_000_000L, "변경됨");
+        ManualAssetRequest req = new ManualAssetRequest(ManualAssetType.DEPOSIT, "변경됨", null, 1_000_000L, null, null);
         manualAssetService.update(USER_ID, 1L, req);
 
         assertThat(existing.getAssetType()).isEqualTo(ManualAssetType.DEPOSIT);
@@ -76,12 +76,12 @@ class ManualAssetServiceTest {
     @Test
     @DisplayName("update — 타인 자산 접근 시 AccessDeniedException 발생")
     void update_타인자산_접근시_예외() {
-        ManualAsset other = ManualAsset.create(OTHER_USER_ID, ManualAssetType.CASH, 100_000L, null);
+        ManualAsset other = ManualAsset.create(OTHER_USER_ID, ManualAssetType.CASH, null, null, 100_000L, null, null);
         ReflectionTestUtils.setField(other, "id", 2L);
         given(manualAssetRepository.findById(2L)).willReturn(Optional.of(other));
 
         assertThatThrownBy(() -> manualAssetService.update(USER_ID, 2L,
-                new ManualAssetRequest(ManualAssetType.CASH, 100_000L, null)))
+                new ManualAssetRequest(ManualAssetType.CASH, null, null, 100_000L, null, null)))
                 .isInstanceOf(AccessDeniedException.class);
 
         then(assetService).should(never()).updateInvestableAmount(any());
@@ -93,7 +93,7 @@ class ManualAssetServiceTest {
         given(manualAssetRepository.findById(99L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> manualAssetService.update(USER_ID, 99L,
-                new ManualAssetRequest(ManualAssetType.CASH, 100_000L, null)))
+                new ManualAssetRequest(ManualAssetType.CASH, null, null, 100_000L, null, null)))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
@@ -102,7 +102,7 @@ class ManualAssetServiceTest {
     @Test
     @DisplayName("delete — 본인 자산 삭제 후 investable_amount 갱신")
     void delete_본인자산_삭제_후_investable_갱신() {
-        ManualAsset existing = ManualAsset.create(USER_ID, ManualAssetType.SAVINGS, 2_000_000L, null);
+        ManualAsset existing = ManualAsset.create(USER_ID, ManualAssetType.SAVINGS, null, null, 2_000_000L, null, null);
         ReflectionTestUtils.setField(existing, "id", 3L);
         given(manualAssetRepository.findById(3L)).willReturn(Optional.of(existing));
 
@@ -117,8 +117,8 @@ class ManualAssetServiceTest {
     @Test
     @DisplayName("getAll — 사용자 수동자산 목록 반환")
     void getAll_목록_반환() {
-        ManualAsset a1 = ManualAsset.create(USER_ID, ManualAssetType.CASH, 100_000L, null);
-        ManualAsset a2 = ManualAsset.create(USER_ID, ManualAssetType.DEPOSIT, 5_000_000L, "KB 예금");
+        ManualAsset a1 = ManualAsset.create(USER_ID, ManualAssetType.CASH, null, null, 100_000L, null, null);
+        ManualAsset a2 = ManualAsset.create(USER_ID, ManualAssetType.DEPOSIT, "KB 예금", null, 5_000_000L, null, null);
         ReflectionTestUtils.setField(a1, "id", 1L);
         ReflectionTestUtils.setField(a2, "id", 2L);
         given(manualAssetRepository.findAllByUserId(USER_ID)).willReturn(List.of(a1, a2));

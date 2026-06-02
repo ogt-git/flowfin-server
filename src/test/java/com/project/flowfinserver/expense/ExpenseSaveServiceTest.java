@@ -158,8 +158,8 @@ class ExpenseSaveServiceTest {
     @DisplayName("중복 거래(existsBy=true) 발생 시 save()가 호출되지 않는다")
     void 중복_거래_발생_시_save가_호출되지_않는다() {
         // classify는 중복 체크 후 skip되므로 stub 불필요
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                anyLong(), any(), anyString(), anyLong())).willReturn(true);
+        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmountAndUsedCard(
+                anyLong(), any(), anyString(), anyLong(), anyString())).willReturn(true);
 
         assertThatNoException()
                 .as("중복 체크 후 skip 처리 시 예외가 외부로 전파되지 않아야 한다")
@@ -171,8 +171,8 @@ class ExpenseSaveServiceTest {
     @DisplayName("3건 중 2번째만 중복 — save() 2회 호출, savedCount=2")
     void 중복_발생한_건을_제외한_나머지는_정상_저장된다() {
         given(classificationService.classify(anyString())).willReturn(ruleResult);
-        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                anyLong(), any(), anyString(), anyLong()))
+        given(expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmountAndUsedCard(
+                anyLong(), any(), anyString(), anyLong(), anyString()))
                 .willReturn(false)
                 .willReturn(true)
                 .willReturn(false);

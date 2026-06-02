@@ -61,6 +61,7 @@ public class CodefController {
             @RequestParam(value = "id", required = false) String id,
             @RequestParam(value = "birthDate", required = false) String birthDate,
             @RequestParam(value = "accountNumber", required = false) String accountNumber,
+            @RequestParam(value = "accountPassword", required = false) String accountPassword,
             @RequestPart(value = "derFile", required = false) @Parameter(content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE)) MultipartFile derFile,
             @RequestPart(value = "keyFile", required = false) @Parameter(content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE)) MultipartFile keyFile
     ) throws Exception {
@@ -72,6 +73,7 @@ public class CodefController {
         request.setId(id);
         request.setBirthDate(birthDate);
         request.setAccountNumber(accountNumber);
+        request.setAccountPassword(accountPassword);
 
         Long userId = (Long) authentication.getPrincipal();
         if ("0".equals(loginType)) {

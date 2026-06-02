@@ -54,7 +54,7 @@ public class OpenAiPortfolioClient {
                         Map.of("role", "user", "content", userMessage)
                 ),
                 "response_format", Map.of("type", "json_object"),
-                "temperature", 0.3
+                "temperature", 0.5
         );
 
         HttpHeaders headers = new HttpHeaders();

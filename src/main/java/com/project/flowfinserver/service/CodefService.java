@@ -15,6 +15,7 @@ import com.project.flowfinserver.repository.AssetAccountRepository;
 import com.project.flowfinserver.repository.AssetItemRepository;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import com.project.flowfinserver.repository.ExpenseRepository;
+import com.project.flowfinserver.util.AesEncryptionUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ public class CodefService {
     private final AssetAccountRepository assetAccountRepository;
     private final AssetItemRepository assetItemRepository;
     private final ExpenseStatsCacheManager expenseStatsCacheManager;
+    private final AesEncryptionUtil aesEncryptionUtil;
 
     // self-injection: @Async는 Spring 프록시를 통해야 동작 — 동일 클래스 내 직접 호출 시 비동기 미적용 방지
     @Lazy
@@ -60,6 +62,9 @@ public class CodefService {
         String businessType = request.getBusinessType().toUpperCase();
         String loginType    = request.getLoginType();
 
+        if (!hasValue(request.getOrganization())) {
+            throw new IllegalArgumentException("organization은 필수입니다.");
+        }
         if (!"CD".equals(businessType) && !"ST".equals(businessType)) {
             throw new IllegalArgumentException("businessType은 CD(카드) 또는 ST(증권)만 허용됩니다.");
         }
@@ -129,22 +134,35 @@ public class CodefService {
             }
             AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
 
+            // 인증서 방식(loginType=0)은 loginId=null, ID/PW 방식(loginType=1)은 request.getId() 사용
+            String loginId     = "1".equals(loginType) ? request.getId() : null;
+            String loginIdHash = (loginId != null) ? aesEncryptionUtil.hash(loginId) : null;
+
             for (JsonNode account : successList) {
                 String organization = account.path("organization").asText();
 
                 // 이미 활성화된 연동이 있으면 skip
-                if (connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveTrue(
-                        userId, organization, accountType)) {
+                boolean alreadyActive = (loginIdHash != null)
+                        ? connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
+                                userId, organization, accountType, loginIdHash)
+                        : connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
+                                userId, organization, accountType);
+
+                if (alreadyActive) {
                     log.info("[Connect] already active for org={} type={}", organization, accountType);
                     continue;
                 }
 
                 // 해제(inactive) 상태 레코드가 있으면 재활성화, 없으면 새로 생성
-                CodefConnectedAccount conn = connectedAccountRepository
-                        .findByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveFalse(userId, organization, accountType)
-                        .orElseGet(() -> CodefConnectedAccount.create(userId, connectedId, organization, accountType));
+                CodefConnectedAccount conn = ((loginIdHash != null)
+                        ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveFalse(
+                                userId, organization, accountType, loginIdHash)
+                        : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveFalse(
+                                userId, organization, accountType))
+                        .orElseGet(() -> CodefConnectedAccount.create(
+                                userId, connectedId, organization, accountType, loginId, loginIdHash));
 
-                conn.reactivate(connectedId);
+                conn.reactivate(connectedId, loginId, loginIdHash);
                 // STOCK: 증권 계좌번호/비밀번호 / CARD(0455·0301): 카드번호/비밀번호 — 동일 컬럼 재활용
                 if (hasValue(request.getAccountNumber()))   conn.updateAccountNumber(request.getAccountNumber());
                 if (hasValue(request.getAccountPassword())) conn.updateAccountPassword(request.getAccountPassword());
@@ -199,9 +217,16 @@ public class CodefService {
         connection.deactivate();
 
         if (connection.getAccountType() == AccountType.CARD) {
-            expenseRepository.deleteAllByUserIdAndCardCompany(userId, connection.getOrganizationCode());
-            expenseStatsCacheManager.evictAllForUser(userId);
-            log.info("[Disconnect] 카드 지출 삭제 완료 userId={} org={}", userId, connection.getOrganizationCode());
+            boolean hasOtherActive = connectedAccountRepository
+                    .existsByUserIdAndOrganizationCodeAndAccountTypeAndIsActiveTrueAndIdNot(
+                            userId, connection.getOrganizationCode(), AccountType.CARD, connectionId);
+            if (!hasOtherActive) {
+                expenseRepository.deleteAllByUserIdAndCardCompany(userId, connection.getOrganizationCode());
+                expenseStatsCacheManager.evictAllForUser(userId);
+                log.info("[Disconnect] 카드 지출 삭제 완료 userId={} org={}", userId, connection.getOrganizationCode());
+            } else {
+                log.info("[Disconnect] 같은 카드사 다른 활성 연동 존재 — 지출 유지 userId={} org={}", userId, connection.getOrganizationCode());
+            }
         } else if (connection.getAccountType() == AccountType.STOCK) {
             assetAccountRepository.findByUserIdAndBrokerCode(userId, connection.getOrganizationCode())
                     .ifPresent(account -> {

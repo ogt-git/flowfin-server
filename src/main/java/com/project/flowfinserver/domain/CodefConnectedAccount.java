@@ -41,6 +41,13 @@ public class CodefConnectedAccount {
     @Column(name = "account_password", length = 255)
     private String accountPassword;
 
+    @Convert(converter = AesEncryptConverter.class)
+    @Column(name = "login_id", length = 255)
+    private String loginId;
+
+    @Column(name = "login_id_hash", length = 64)
+    private String loginIdHash;
+
     @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
     private boolean isActive;
 
@@ -49,12 +56,15 @@ public class CodefConnectedAccount {
     private LocalDateTime createdAt;
 
     public static CodefConnectedAccount create(Long userId, String connectedId,
-                                                String organizationCode, AccountType accountType) {
+                                                String organizationCode, AccountType accountType,
+                                                String loginId, String loginIdHash) {
         CodefConnectedAccount conn = new CodefConnectedAccount();
         conn.userId = userId;
         conn.connectedId = connectedId;
         conn.organizationCode = organizationCode;
         conn.accountType = accountType;
+        conn.loginId = loginId;
+        conn.loginIdHash = loginIdHash;
         conn.isActive = true;
         return conn;
     }
@@ -63,8 +73,10 @@ public class CodefConnectedAccount {
         this.isActive = false;
     }
 
-    public void reactivate(String newConnectedId) {
+    public void reactivate(String newConnectedId, String loginId, String loginIdHash) {
         this.connectedId = newConnectedId;
+        this.loginId = loginId;
+        this.loginIdHash = loginIdHash;
         this.isActive = true;
     }
 

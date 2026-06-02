@@ -449,27 +449,44 @@ public class CodefSyncService {
                     params.put("cardPassword", codefApiClient.encryptRSA(cardPw));
                 }
 
-                String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
-                JsonNode root = objectMapper.readTree(response);
+                boolean monthProcessed = false;
+                for (int attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
+                        JsonNode root = objectMapper.readTree(response);
 
-                String resultCode = root.path("result").path("code").asText();
-                if (!CODEF_SUCCESS.equals(resultCode)) {
-                    String message = root.path("result").path("message").asText();
-                    handleCodefError(resultCode, message, account);
-                    return new int[]{totalSaved, totalSkipped};
-                }
+                        String resultCode = root.path("result").path("code").asText();
+                        if (!CODEF_SUCCESS.equals(resultCode)) {
+                            String message = root.path("result").path("message").asText();
+                            handleCodefError(resultCode, message, account);
+                            // RATE_LIMIT: handleCodefError가 throw 없이 반환 — 해당 달 스킵
+                            break;
+                        }
 
-                JsonNode data = root.path("data");
-                if (data.isArray()) {
-                    log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
-                } else {
-                    JsonNode txArray = data.path("resChargeHistoryList");
-                    if (txArray.isArray()) {
-                        int[] counts = saveExpensesFromTxArray(userId, org, txArray);
-                        totalSaved   += counts[0];
-                        totalSkipped += counts[1];
-                    } else {
-                        log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
+                        JsonNode data = root.path("data");
+                        if (data.isArray()) {
+                            log.info("[CODEF Sync] 청구 내역 없음 org={} startDate={}", org, startDate);
+                        } else {
+                            JsonNode txArray = data.path("resChargeHistoryList");
+                            if (txArray.isArray()) {
+                                int[] counts = saveExpensesFromTxArray(userId, org, txArray);
+                                totalSaved   += counts[0];
+                                totalSkipped += counts[1];
+                            } else {
+                                log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
+                            }
+                        }
+                        monthProcessed = true;
+                        break;
+                    } catch (CodefRetryableException e) {
+                        if (attempt < 3) {
+                            log.warn("[CODEF Sync] 일시적 오류 재시도 {}/3 org={} startDate={} code={}",
+                                    attempt, org, startDate, e.getErrorCode());
+                        } else {
+                            log.warn("[CODEF Sync] 재시도 소진 — 해당 월 스킵 org={} startDate={} code={}",
+                                    org, startDate, e.getErrorCode());
+                        }
+                        // CodefApiException·CodefAuthException 등 비재시도 예외는 그대로 전파
                     }
                 }
                 cursor = cursor.plusMonths(1);
@@ -588,8 +605,6 @@ public class CodefSyncService {
         List<CardBillingDto> items = new ArrayList<>();
         for (JsonNode tx : txArray) {
             String paymentType = firstNonEmpty(tx, "resPaymentType");
-            // 단기/장기 카드대출은 지출이 아닌 대출상환 — 저장 제외
-            if ("4".equals(paymentType) || "5".equals(paymentType)) continue;
 
             String dateStr = firstNonEmpty(tx, "resUsedDate");
             // resUsedDate 미제공 시 결제예정일로 대체 (KB 할인혜택, 현대 이월약정, 신한 연회비 등)

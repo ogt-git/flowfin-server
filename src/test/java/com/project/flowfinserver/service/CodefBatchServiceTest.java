@@ -31,7 +31,7 @@ class CodefBatchServiceTest {
 
     @BeforeEach
     void setUp() {
-        cardConn = CodefConnectedAccount.create(1L, "conn-id-001", "0301", AccountType.CARD);
+        cardConn = CodefConnectedAccount.create(1L, "conn-id-001", "0301", AccountType.CARD, null, null);
         ReflectionTestUtils.setField(cardConn, "id", 10L);
     }
 

@@ -88,8 +88,8 @@ class CodefSyncServiceTest {
 
     @BeforeEach
     void setUp() {
-        cardAccount  = CodefConnectedAccount.create(TEST_USER_ID, "card-connected-id", "0301", AccountType.CARD);
-        stockAccount = CodefConnectedAccount.create(TEST_USER_ID, "stock-connected-id", "0240", AccountType.STOCK);
+        cardAccount  = CodefConnectedAccount.create(TEST_USER_ID, "card-connected-id", "0301", AccountType.CARD, null, null);
+        stockAccount = CodefConnectedAccount.create(TEST_USER_ID, "stock-connected-id", "0240", AccountType.STOCK, null, null);
         stockAccount.updateAccountNumber("12345678901");
     }
 
@@ -99,7 +99,8 @@ class CodefSyncServiceTest {
     @DisplayName("manualSyncCard — 쿨다운 중: TooManyRequestsException 발생")
     void manualSyncCard_throwsWhenCooldownActive() {
         String key = "codef:refresh:cooldown:" + TEST_USER_ID + ":CARD";
-        given(stringRedisTemplate.hasKey(key)).willReturn(true);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(eq(key), eq("1"), eq(5L), eq(TimeUnit.MINUTES))).willReturn(false);
 
         assertThatThrownBy(() -> codefSyncService.manualSyncCard(TEST_USER_ID))
                 .isInstanceOf(TooManyRequestsException.class)
@@ -110,14 +111,14 @@ class CodefSyncServiceTest {
     @DisplayName("manualSyncCard — 쿨다운 없음: Redis 키 설정 후 동기화 실행")
     void manualSyncCard_setsCooldownKeyAndSyncs() {
         String key = "codef:refresh:cooldown:" + TEST_USER_ID + ":CARD";
-        given(stringRedisTemplate.hasKey(key)).willReturn(false);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(eq(key), eq("1"), eq(5L), eq(TimeUnit.MINUTES))).willReturn(true);
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of());
 
         CodefSyncResultDto result = codefSyncService.manualSyncCard(TEST_USER_ID);
 
-        then(valueOps).should().set(eq(key), eq("1"), eq(5L), eq(TimeUnit.MINUTES));
+        then(valueOps).should().setIfAbsent(eq(key), eq("1"), eq(5L), eq(TimeUnit.MINUTES));
         assertThat(result.getAccountType()).isEqualTo("CARD");
         assertThat(result.getSavedCount()).isZero();
     }
@@ -126,7 +127,8 @@ class CodefSyncServiceTest {
     @DisplayName("manualSyncStock — 쿨다운 중: TooManyRequestsException 발생")
     void manualSyncStock_throwsWhenCooldownActive() {
         String key = "codef:refresh:cooldown:" + TEST_USER_ID + ":STOCK";
-        given(stringRedisTemplate.hasKey(key)).willReturn(true);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(eq(key), eq("1"), eq(5L), eq(TimeUnit.MINUTES))).willReturn(false);
 
         assertThatThrownBy(() -> codefSyncService.manualSyncStock(TEST_USER_ID))
                 .isInstanceOf(TooManyRequestsException.class)
@@ -138,8 +140,8 @@ class CodefSyncServiceTest {
     @Test
     @DisplayName("syncCard — 정상 응답: ExpenseSaveService에 위임하여 결과 반환")
     void syncCard_delegatesToExpenseSaveService() throws Exception {
-        given(stringRedisTemplate.hasKey(anyString())).willReturn(false);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), eq("1"), anyLong(), any(TimeUnit.class))).willReturn(true);
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of(cardAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_SUCCESS_RESPONSE);
@@ -148,9 +150,10 @@ class CodefSyncServiceTest {
 
         CodefSyncResultDto result = codefSyncService.syncCard(TEST_USER_ID);
 
-        assertThat(result.getSavedCount()).isEqualTo(3);
+        // BATCH_CARD_MONTHS=2: 이전 달 + 현재 달 2회 호출, 각 3건 → 합계 6건
+        assertThat(result.getSavedCount()).isEqualTo(6);
         assertThat(result.getFailedAccounts()).isEmpty();
-        then(expenseSaveService).should(times(1)).saveExpenses(eq(TEST_USER_ID), any());
+        then(expenseSaveService).should(times(2)).saveExpenses(eq(TEST_USER_ID), any());
     }
 
     @Test
@@ -166,8 +169,8 @@ class CodefSyncServiceTest {
     @Test
     @DisplayName("syncCard — CODEF 오류 코드: failedAccounts에 오류 코드 포함하여 기록")
     void syncCard_recordsFailedAccountOnCodefError() throws Exception {
-        given(stringRedisTemplate.hasKey(anyString())).willReturn(false);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), eq("1"), anyLong(), any(TimeUnit.class))).willReturn(true);
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.CARD))
                 .willReturn(List.of(cardAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_ERROR_RESPONSE);
@@ -185,6 +188,8 @@ class CodefSyncServiceTest {
     @Test
     @DisplayName("syncStock — 정상 응답: AssetService에 위임하여 계좌·종목 upsert")
     void syncStock_delegatesToAssetService() throws Exception {
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), eq("1"), anyLong(), any(TimeUnit.class))).willReturn(true);
         given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
                 .willReturn(List.of(stockAccount));
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(STOCK_SUCCESS_RESPONSE);

@@ -105,7 +105,7 @@ class CodefSyncIntegrationTest {
     @DisplayName("카드 동기화 전체 흐름: CODEF 응답 → 파싱 → DB 저장 → 조회")
     void syncCard_fullFlow_savesAndRetrievesExpenses() throws Exception {
         connectedAccountRepository.save(
-                CodefConnectedAccount.create(testUserId, "demo-connected-id-001", "0301", AccountType.CARD));
+                CodefConnectedAccount.create(testUserId, "demo-connected-id-001", "0301", AccountType.CARD, null, null));
 
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_MOCK_RESPONSE);
 
@@ -148,7 +148,7 @@ class CodefSyncIntegrationTest {
     @DisplayName("중복 동기화: 동일 데이터 두 번 호출 → 두 번째는 모두 스킵")
     void syncCard_secondCall_skipsAllDuplicates() throws Exception {
         connectedAccountRepository.save(
-                CodefConnectedAccount.create(testUserId, "demo-connected-id-002", "0301", AccountType.CARD));
+                CodefConnectedAccount.create(testUserId, "demo-connected-id-002", "0301", AccountType.CARD, null, null));
 
         given(codefApiClient.requestProduct(anyString(), any())).willReturn(CARD_MOCK_RESPONSE);
 
@@ -183,7 +183,7 @@ class CodefSyncIntegrationTest {
     @DisplayName("증권 동기화 전체 흐름: resItemList → AssetAccount·AssetItem upsert 확인")
     void syncStock_fullFlow_savesAssetAccountAndItems() throws Exception {
         CodefConnectedAccount stockConn = CodefConnectedAccount.create(
-                testUserId, "stock-connected-id-001", "0240", AccountType.STOCK);
+                testUserId, "stock-connected-id-001", "0240", AccountType.STOCK, null, null);
         stockConn.updateAccountNumber("12345678901");
         connectedAccountRepository.save(stockConn);
 
@@ -220,7 +220,7 @@ class CodefSyncIntegrationTest {
     @DisplayName("증권 중복 동기화: 두 번째 호출 시 기존 데이터 upsert(업데이트)")
     void syncStock_secondCall_upsertsSameAccount() throws Exception {
         CodefConnectedAccount stockConn = CodefConnectedAccount.create(
-                testUserId, "stock-connected-id-002", "0240", AccountType.STOCK);
+                testUserId, "stock-connected-id-002", "0240", AccountType.STOCK, null, null);
         stockConn.updateAccountNumber("12345678901");
         connectedAccountRepository.save(stockConn);
 
@@ -247,7 +247,7 @@ class CodefSyncIntegrationTest {
         String plainConnectedId = "plain-connected-id-12345";
 
         CodefConnectedAccount saved = connectedAccountRepository.save(
-                CodefConnectedAccount.create(testUserId, plainConnectedId, "0301", AccountType.CARD));
+                CodefConnectedAccount.create(testUserId, plainConnectedId, "0301", AccountType.CARD, null, null));
 
         connectedAccountRepository.flush();
         CodefConnectedAccount reloaded = connectedAccountRepository.findById(saved.getId()).orElseThrow();

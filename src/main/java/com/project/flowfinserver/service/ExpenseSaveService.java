@@ -41,8 +41,8 @@ public class ExpenseSaveService {
         List<Long> pendingAiIds = new ArrayList<>();
 
         for (CardBillingDto item : items) {
-            boolean duplicate = expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmount(
-                    userId, item.expenseDate(), item.merchantName(), item.amount());
+            boolean duplicate = expenseRepository.existsByUserIdAndExpenseDateAndMerchantNameAndAmountAndUsedCard(
+                    userId, item.expenseDate(), item.merchantName(), item.amount(), item.usedCard());
             if (duplicate) {
                 log.debug("[ExpenseSave] 중복 스킵 userId={} merchant={} date={} amount={}",
                         userId, item.merchantName(), item.expenseDate(), item.amount());

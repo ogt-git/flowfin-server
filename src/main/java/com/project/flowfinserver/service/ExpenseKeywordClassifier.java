@@ -41,7 +41,7 @@ public class ExpenseKeywordClassifier {
 
         for (MerchantCategoryRule rule : all) {
             if (rule.getMatchType() == MatchType.EXACT) {
-                newExact.put(rule.getKeyword(), rule);
+                newExact.put(normalize(rule.getKeyword()), rule);
             } else {
                 newContains.add(rule);
             }
@@ -60,17 +60,45 @@ public class ExpenseKeywordClassifier {
     public MerchantCategoryRule classify(String merchantName) {
         if (merchantName == null || merchantName.isBlank()) return null;
 
+        String normalized = normalize(merchantName);
+
         // 1단계: EXACT (완전 일치)
-        MerchantCategoryRule exactMatch = exactRules.get(merchantName);
+        MerchantCategoryRule exactMatch = exactRules.get(normalized);
         if (exactMatch != null) return exactMatch;
 
         // 2단계: CONTAINS (priority 내림차순으로 이미 정렬됨)
         for (MerchantCategoryRule rule : containsRules) {
-            if (merchantName.contains(rule.getKeyword())) {
+            if (normalized.contains(normalize(rule.getKeyword()))) {
                 return rule;
             }
         }
 
         return null;
+    }
+
+    // package-private: 단위 테스트에서 직접 검증
+    String normalize(String s) {
+        if (s == null) return "";
+
+        // 1. trim + toLowerCase
+        String result = s.trim().toLowerCase();
+        if (result.isEmpty()) return result;
+
+        // 2. 법인 표기 제거: (주), 주식회사, (유), (재), (사), (합)
+        String step = result.replaceAll("\\(주\\)|주식회사|\\(유\\)|\\(재\\)|\\(사\\)|\\(합\\)", "").trim();
+        if (!step.isEmpty() && step.length() >= 2) result = step;
+
+        // 3. 괄호류 내용 제거: (), [] 안 내용 통째로
+        step = result.replaceAll("\\([^)]*\\)|\\[[^\\]]*\\]", "").trim();
+        if (!step.isEmpty() && step.length() >= 2) result = step;
+
+        // 4. 언더스코어 → 공백
+        result = result.replace('_', ' ');
+
+        // 5. 연속 공백 → 단일 공백
+        result = result.replaceAll("\\s+", " ");
+
+        // 6. 최종 trim
+        return result.trim();
     }
 }

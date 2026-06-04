@@ -1,6 +1,7 @@
 package com.project.flowfinserver.dto.expense;
 
 import com.project.flowfinserver.domain.Category;
+import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.domain.Expense;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,7 +39,8 @@ public class ExpenseResponse {
                 .categoryConfidence(expense.getCategoryConfidence())
                 .isUserModified(expense.isUserModified())
                 .categoryId(category != null ? category.getId() : null)
-                .categoryName(category != null ? category.getName() : null)
+                .categoryName(category != null ? category.getName()
+                        : (expense.getClassifiedBy() == ClassifiedBy.PENDING ? "미분류" : null))
                 .categoryType(category != null && category.getType() != null ? category.getType().name() : null)
                 .build();
     }

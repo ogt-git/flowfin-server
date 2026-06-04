@@ -130,29 +130,31 @@ public class CodefController {
         }
     }
 
-    @Operation(summary = "카드 청구 내역 수집 (내부 전용)", description = "CODEF API로 카드 청구 내역을 조회하고 Expense DB에 저장합니다.")
-    @PostMapping("/card")
-    public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncCard(
-            Authentication authentication,
-            @Valid @RequestBody CodefCardRequest request) throws Exception {
-        Long userId = (Long) authentication.getPrincipal();
-        String rawResponse = codefService.getCardBillingList(request);
-        CodefSyncResultDto result = codefSyncService.saveFromRawResponse(
-                userId, request.getConnectedId(), request.getOrganization(), rawResponse);
-        String message = result.getSavedCount() == 0 ? "조회된 청구 내역이 없습니다." : "요청이 성공적으로 처리되었습니다.";
-        return ResponseEntity.ok(ApiResponse.success(result, message));
-    }
+    // 내부 전용 엔드포인트 — 외부 노출 차단 (소유권 검증 없음, CODEF 한도 소진 위험)
+    // 필요 시 소유권 검증 추가 후 활성화할 것
+//    @Operation(summary = "카드 청구 내역 수집 (내부 전용)", description = "CODEF API로 카드 청구 내역을 조회하고 Expense DB에 저장합니다.")
+//    @PostMapping("/card")
+//    public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncCard(
+//            Authentication authentication,
+//            @Valid @RequestBody CodefCardRequest request) throws Exception {
+//        Long userId = (Long) authentication.getPrincipal();
+//        String rawResponse = codefService.getCardBillingList(request);
+//        CodefSyncResultDto result = codefSyncService.saveFromRawResponse(
+//                userId, request.getConnectedId(), request.getOrganization(), rawResponse);
+//        String message = result.getSavedCount() == 0 ? "조회된 청구 내역이 없습니다." : "요청이 성공적으로 처리되었습니다.";
+//        return ResponseEntity.ok(ApiResponse.success(result, message));
+//    }
 
-    @Operation(summary = "증권 종합자산 수집 (내부 전용)", description = "CODEF API로부터 증권 종합자산을 조회하고 Asset_Account/Asset_Item에 저장합니다.")
-    @PostMapping("/stock")
-    public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncStock(
-            Authentication authentication,
-            @Valid @RequestBody CodefStockRequest request) throws Exception {
-        Long userId = (Long) authentication.getPrincipal();
-        String rawResponse = codefService.getStockAssets(request);
-        CodefSyncResultDto result = codefSyncService.saveStockFromRawResponse(
-                userId, request.getOrganization(), rawResponse);
-        String message = result.getSavedCount() == 0 ? "업데이트된 자산 정보가 없습니다." : "증권 자산이 저장되었습니다.";
-        return ResponseEntity.ok(ApiResponse.success(result, message));
-    }
+//    @Operation(summary = "증권 종합자산 수집 (내부 전용)", description = "CODEF API로부터 증권 종합자산을 조회하고 Asset_Account/Asset_Item에 저장합니다.")
+//    @PostMapping("/stock")
+//    public ResponseEntity<ApiResponse<CodefSyncResultDto>> syncStock(
+//            Authentication authentication,
+//            @Valid @RequestBody CodefStockRequest request) throws Exception {
+//        Long userId = (Long) authentication.getPrincipal();
+//        String rawResponse = codefService.getStockAssets(request);
+//        CodefSyncResultDto result = codefSyncService.saveStockFromRawResponse(
+//                userId, request.getOrganization(), rawResponse);
+//        String message = result.getSavedCount() == 0 ? "업데이트된 자산 정보가 없습니다." : "증권 자산이 저장되었습니다.";
+//        return ResponseEntity.ok(ApiResponse.success(result, message));
+//    }
 }

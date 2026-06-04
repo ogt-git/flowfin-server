@@ -1,6 +1,7 @@
 package com.project.flowfinserver.repository;
 
 import com.project.flowfinserver.domain.CategoryType;
+import com.project.flowfinserver.domain.ClassifiedBy;
 import com.project.flowfinserver.domain.Expense;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -103,6 +104,17 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
             @Param("categoryId") Long categoryId,
             @Param("categoryType") CategoryType categoryType,
             Pageable pageable);
+
+    // PENDING 재시도: 생성 1시간 이내, 오래된 순 (스케줄러 배치용)
+    @Query("SELECT e.id FROM Expense e WHERE e.classifiedBy = :status AND e.createdAt > :cutoff ORDER BY e.createdAt ASC")
+    List<Long> findPendingIdsForRetry(@Param("status") ClassifiedBy status,
+                                      @Param("cutoff") LocalDateTime cutoff,
+                                      Pageable pageable);
+
+    // PENDING 타임아웃: 생성 1시간 초과 → 기타지출 확정 대상
+    @Query("SELECT e.id FROM Expense e WHERE e.classifiedBy = :status AND e.createdAt <= :cutoff")
+    List<Long> findPendingIdsTimedOut(@Param("status") ClassifiedBy status,
+                                      @Param("cutoff") LocalDateTime cutoff);
 
     void deleteAllByUserId(Long userId);
 

@@ -11,6 +11,8 @@ public enum CodefErrorType {
     RATE_LIMIT_ERROR,
     /** 영구 오류 — 연동 비활성화 */
     PERMANENT_ERROR,
+    /** 금융기관 사이트 변경/점검 — 재시도·비활성화 없이 "조회 불가" 안내 */
+    INSTITUTION_UNAVAILABLE,
     /** 미분류 오류 — 연동 비활성화 */
     UNKNOWN
 }

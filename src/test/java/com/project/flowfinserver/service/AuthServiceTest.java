@@ -71,7 +71,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.signup(request))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("이미 존재하는 이메일");
+                .hasMessageContaining("이미 사용 중인 이메일");
 
         then(userRepository).should(never()).save(any());
     }
@@ -106,7 +106,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("존재하지 않는 이메일");
+                .hasMessageContaining("이메일 또는 비밀번호가 올바르지 않습니다");
     }
 
     @Test
@@ -121,6 +121,6 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("비밀번호가 일치하지 않습니다");
+                .hasMessageContaining("이메일 또는 비밀번호가 올바르지 않습니다");
     }
 }

@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -97,6 +98,9 @@ class CodefSyncIntegrationTest {
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         given(stringRedisTemplate.hasKey(anyString())).willReturn(false);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        // Mockito는 Boolean 래퍼 타입 미설정 시 false를 반환 → lock conflict 발생
+        // setIfAbsent: true = 락 획득 성공으로 설정
+        given(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).willReturn(true);
     }
 
     // ==================== syncCard 통합 테스트 ====================
@@ -117,7 +121,8 @@ class CodefSyncIntegrationTest {
         System.out.println("실패 계좌: " + result.getFailedAccounts());
 
         assertThat(result.getSavedCount()).isEqualTo(4);
-        assertThat(result.getSkippedCount()).isZero();
+        // BATCH_CARD_MONTHS=2: 첫 번째 달 4건 저장, 두 번째 달은 동일 Mock 응답 → 4건 중복 skip
+        assertThat(result.getSkippedCount()).isEqualTo(4);
         assertThat(result.getFailedAccounts()).isEmpty();
 
         List<Expense> savedExpenses = expenseRepository.findByUserIdAndExpenseDateBetween(
@@ -161,7 +166,8 @@ class CodefSyncIntegrationTest {
 
         assertThat(first.getSavedCount()).isEqualTo(4);
         assertThat(second.getSavedCount()).isZero();
-        assertThat(second.getSkippedCount()).isEqualTo(4);
+        // 2차 syncCard는 2개월 × 4건 = 8건 모두 중복 skip
+        assertThat(second.getSkippedCount()).isEqualTo(8);
 
         long count = expenseRepository.findByUserIdAndExpenseDateBetween(
                 testUserId,

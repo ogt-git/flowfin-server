@@ -24,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -67,6 +68,9 @@ class AiExpenseClassifierTest {
         given(fallbackCat.getId()).willReturn(FALLBACK_ID);
 
         given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+
+        // self-injection: @Lazy @Autowired 필드는 @InjectMocks가 주입하지 않으므로 수동 설정
+        ReflectionTestUtils.setField(classifier, "self", classifier);
     }
 
     // ==================== isUserModified 보호 ====================

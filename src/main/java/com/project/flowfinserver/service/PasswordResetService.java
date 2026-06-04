@@ -26,7 +26,7 @@ public class PasswordResetService {
     private static final String OTP_PREFIX       = "otp:code:";
     private static final String COOLDOWN_PREFIX  = "otp:cooldown:";
     private static final long   OTP_TTL_MIN      = 5;
-    private static final long   COOLDOWN_TTL_SEC = 180;
+    private static final long   COOLDOWN_TTL_SEC = 15;
 
     private final UserRepository userRepository;
     private final AesEncryptionUtil encryptionUtil;
@@ -48,7 +48,7 @@ public class PasswordResetService {
         // 1분 쿨다운
         String cooldownKey = COOLDOWN_PREFIX + emailHash;
         if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
-            throw new TooManyRequestsException("인증코드는 1분에 한 번만 요청할 수 있습니다.");
+            throw new TooManyRequestsException("인증코드는 15초에 한 번만 요청할 수 있습니다.");
         }
 
         String otp = generateOtp();

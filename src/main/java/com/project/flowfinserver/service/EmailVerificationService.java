@@ -25,7 +25,7 @@ public class EmailVerificationService {
     private static final String COOLDOWN_PREFIX = "signup:cooldown:";
     private static final String TOKEN_PREFIX    = "signup:verified:";
     private static final long   OTP_TTL_MIN     = 5;
-    private static final long   COOLDOWN_SEC    = 180;
+    private static final long   COOLDOWN_SEC    = 15;
     private static final long   TOKEN_TTL_MIN   = 10;
 
     private final UserRepository userRepository;
@@ -45,7 +45,7 @@ public class EmailVerificationService {
 
         String cooldownKey = COOLDOWN_PREFIX + emailHash;
         if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
-            throw new TooManyRequestsException("인증코드는 3분에 한 번만 요청할 수 있습니다.");
+            throw new TooManyRequestsException("인증코드는 15초에 한 번만 요청할 수 있습니다.");
         }
 
         String otp = generateOtp();

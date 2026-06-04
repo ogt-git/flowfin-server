@@ -18,7 +18,12 @@ public final class CodefErrorClassifier {
     private static final Set<String> TRANSIENT_ERROR_CODES = Set.of(
             "CF-01002", "CF-01004", "CF-01007", "CF-00016",
             "CF-01006", "CF-12003", "CF-12104", "CF-12703",
-            "CF-12201", "CF-12701"
+            "CF-12201"
+    );
+
+
+    private static final Set<String> INSTITUTION_UNAVAILABLE_CODES = Set.of(
+            "CF-12701", "CF-12710", "CF-12040"
     );
 
     private static final Set<String> RATE_LIMIT_CODES = Set.of(
@@ -33,11 +38,12 @@ public final class CodefErrorClassifier {
 
     public static CodefErrorType classify(String errorCode) {
         if (errorCode == null) return CodefErrorType.UNKNOWN;
-        if (AUTH_ERROR_CODES.contains(errorCode))        return CodefErrorType.AUTH_ERROR;
-        if (AUTH_UNRECOVERABLE_CODES.contains(errorCode)) return CodefErrorType.AUTH_UNRECOVERABLE;
-        if (TRANSIENT_ERROR_CODES.contains(errorCode))   return CodefErrorType.TRANSIENT_ERROR;
-        if (RATE_LIMIT_CODES.contains(errorCode))        return CodefErrorType.RATE_LIMIT_ERROR;
-        if (PERMANENT_ERROR_CODES.contains(errorCode))   return CodefErrorType.PERMANENT_ERROR;
+        if (AUTH_ERROR_CODES.contains(errorCode))               return CodefErrorType.AUTH_ERROR;
+        if (AUTH_UNRECOVERABLE_CODES.contains(errorCode))        return CodefErrorType.AUTH_UNRECOVERABLE;
+        if (TRANSIENT_ERROR_CODES.contains(errorCode))           return CodefErrorType.TRANSIENT_ERROR;
+        if (RATE_LIMIT_CODES.contains(errorCode))                return CodefErrorType.RATE_LIMIT_ERROR;
+        if (PERMANENT_ERROR_CODES.contains(errorCode))           return CodefErrorType.PERMANENT_ERROR;
+        if (INSTITUTION_UNAVAILABLE_CODES.contains(errorCode))   return CodefErrorType.INSTITUTION_UNAVAILABLE;
         return CodefErrorType.UNKNOWN;
     }
 }

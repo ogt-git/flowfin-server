@@ -135,6 +135,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage(), e.getCodefCode()));
     }
 
+    // 금융기관 사이트 변경/점검으로 조회 불가 (CF-12701, CF-12710) — 503 Service Unavailable
+    @ExceptionHandler(CodefInstitutionUnavailableException.class)
+    public ResponseEntity<ApiResponse<?>> handleCodefInstitutionUnavailable(CodefInstitutionUnavailableException e) {
+        log.warn("금융기관 조회 불가: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(e.getMessage(), "INSTITUTION_UNAVAILABLE"));
+    }
+
     // 제외 처리된 지출 카테고리 수정 시도 등 잘못된 상태 전환 → 400
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {

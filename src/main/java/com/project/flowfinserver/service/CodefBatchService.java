@@ -1,7 +1,9 @@
 package com.project.flowfinserver.service;
 
 import com.project.flowfinserver.domain.CodefConnectedAccount;
+import com.project.flowfinserver.exception.CodefInstitutionUnavailableException;
 import com.project.flowfinserver.exception.CodefRetryableException;
+import com.project.flowfinserver.exception.CodefSyncLockConflictException;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +20,7 @@ public class CodefBatchService {
     private final CodefConnectedAccountRepository connectedAccountRepository;
     private final CodefSyncService codefSyncService;
 
-    @Scheduled(cron = "0 0 2 * * *")
+    @Scheduled(cron = "0 0 2 * * *", zone = "Asia/Seoul")
     public void syncAllActiveConnections() {
         List<CodefConnectedAccount> connections = connectedAccountRepository.findAllByIsActiveTrue();
         log.info("[Batch] CODEF 동기화 시작 — 활성 연동 수={}", connections.size());
@@ -31,6 +33,18 @@ public class CodefBatchService {
                 try {
                     codefSyncService.syncConnection(conn);
                     synced = true;
+                    break;
+                } catch (CodefInstitutionUnavailableException e) {
+                    // 금융기관 사이트 변경/점검 — 재시도·비활성화 없이 이번 배치 스킵
+                    log.warn("[Batch] 금융기관 조회 불가 — 연동 유지 스킵 userId={} org={} code={}",
+                            conn.getUserId(), conn.getOrganizationCode(), e.getCodefCode());
+                    synced = true; // 연동 비활성화 방지
+                    break;
+                } catch (CodefSyncLockConflictException e) {
+                    // 수동 새로고침과 락 충돌 — 다른 동기화 진행 중이므로 이번 배치 스킵, 비활성화 금지
+                    log.info("[Batch] 락 충돌 — 다른 동기화 진행 중, 스킵 userId={} org={}",
+                            conn.getUserId(), conn.getOrganizationCode());
+                    synced = true; // 연동 비활성화 방지
                     break;
                 } catch (CodefRetryableException e) {
                     // 일시적 오류만 재시도

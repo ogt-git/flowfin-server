@@ -343,6 +343,7 @@ public class CodefSyncService {
      * - AUTH_UNRECOVERABLE / PERMANENT / UNKNOWN: 연동 비활성화
      * - TRANSIENT_ERROR: CodefRetryableException throw (배치 재시도 신호)
      * - RATE_LIMIT: 경고 로그만 기록, skip
+     * - INSTITUTION_UNAVAILABLE: 연동 비활성화 없이 CodefInstitutionUnavailableException throw
      */
     private void handleCodefError(String errorCode, String message, CodefConnectedAccount conn) throws Exception {
         // 카드 추가 인증 필요 — is_active 변경 없이 422로 응답
@@ -373,6 +374,10 @@ public class CodefSyncService {
                 throw new CodefRetryableException(errorCode, "일시적 CODEF 오류: " + errorCode + " — " + message);
             }
             case RATE_LIMIT_ERROR -> log.warn("[CodefError] 요청 한도 초과 — 건너뜀 connectionId={}", conn.getId());
+            case INSTITUTION_UNAVAILABLE -> {
+                log.warn("[CodefError] 금융기관 조회 불가 — 연동 유지, 재시도 없음 code={} connectionId={}", errorCode, conn.getId());
+                throw new CodefInstitutionUnavailableException(errorCode);
+            }
             case PERMANENT_ERROR, UNKNOWN -> {
                 log.error("[CodefError] 영구/미분류 오류 — 연동 비활성화 connectionId={}", conn.getId());
                 deactivateById(conn.getId());
@@ -416,7 +421,7 @@ public class CodefSyncService {
         String lockKey = "codef:lock:" + account.getConnectedId();
         Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SYNC_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
         if (Boolean.FALSE.equals(acquired)) {
-            throw new TooManyRequestsException("동기화가 이미 진행 중입니다. 잠시 후 다시 시도해 주세요.");
+            throw new CodefSyncLockConflictException();
         }
         try {
             String org = account.getOrganizationCode();
@@ -506,7 +511,7 @@ public class CodefSyncService {
         String lockKey = "codef:lock:" + account.getConnectedId();
         Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", SYNC_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
         if (Boolean.FALSE.equals(acquired)) {
-            throw new TooManyRequestsException("동기화가 이미 진행 중입니다. 잠시 후 다시 시도해 주세요.");
+            throw new CodefSyncLockConflictException();
         }
         try {
             HashMap<String, Object> params = new HashMap<>();
@@ -640,8 +645,7 @@ public class CodefSyncService {
                             try {
                                 aiExpenseClassifier.classifyAndUpdate(id);
                             } catch (TaskRejectedException e) {
-                                log.warn("[AiClassify] 큐 포화 → 기타지출 동기 확정 expenseId={}", id);
-                                aiExpenseClassifier.fallbackToEtc(id);
+                                log.debug("[AiClassify] 큐 포화 → PENDING 유지, 스케줄러 재처리 예정 expenseId={}", id);
                             }
                         }
                     }
@@ -651,8 +655,7 @@ public class CodefSyncService {
                     try {
                         aiExpenseClassifier.classifyAndUpdate(id);
                     } catch (TaskRejectedException e) {
-                        log.warn("[AiClassify] 큐 포화 → 기타지출 동기 확정 expenseId={}", id);
-                        aiExpenseClassifier.fallbackToEtc(id);
+                        log.debug("[AiClassify] 큐 포화 → PENDING 유지, 스케줄러 재처리 예정 expenseId={}", id);
                     }
                 }
             }

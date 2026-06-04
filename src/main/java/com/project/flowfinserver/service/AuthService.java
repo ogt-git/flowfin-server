@@ -21,8 +21,11 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final AesEncryptionUtil encryptionUtil;
     private final RedisTokenService redisTokenService;
+    private final EmailVerificationService emailVerificationService;
 
     public void signup(SignupRequest request) {
+        emailVerificationService.validateAndConsume(request.getEmail(), request.getVerificationToken());
+
         String emailHash = encryptionUtil.hash(request.getEmail());
         if (userRepository.existsByEmailHash(emailHash)) {
             throw new DuplicateEmailException("이미 사용 중인 이메일입니다. 다른 이메일을 사용해주세요.");

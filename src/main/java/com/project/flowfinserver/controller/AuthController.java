@@ -5,8 +5,12 @@ import com.project.flowfinserver.service.AuthService;
 import com.project.flowfinserver.service.EmailVerificationService;
 import com.project.flowfinserver.service.PasswordResetService;
 import java.util.Map;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +19,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private static final int REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60; // 7일
+
+    @Value("${app.cookie.secure}")
+    private boolean cookieSecure;
 
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
@@ -27,19 +36,57 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+                                               HttpServletResponse response) {
+        AuthService.LoginResult result = authService.login(request);
+        setRefreshTokenCookie(response, result.refreshToken());
+        return ResponseEntity.ok(result.loginResponse());
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<TokenResponse> refresh(@Valid @RequestBody TokenRefreshRequest request) {
-        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
+    public ResponseEntity<TokenResponse> refresh(HttpServletRequest request,
+                                                 HttpServletResponse response) {
+        String refreshToken = extractRefreshTokenCookie(request);
+        AuthService.RefreshResult result = authService.refresh(refreshToken);
+        setRefreshTokenCookie(response, result.newRefreshToken());
+        return ResponseEntity.ok(new TokenResponse(result.newAccessToken()));
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(Authentication authentication) {
+    public ResponseEntity<Void> logout(Authentication authentication, HttpServletResponse response) {
         authService.logout((Long) authentication.getPrincipal());
+        clearRefreshTokenCookie(response);
         return ResponseEntity.ok().build();
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie("refreshToken", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        cookie.setPath("/api/auth/refresh");
+        cookie.setMaxAge(REFRESH_TOKEN_MAX_AGE);
+        response.addCookie(cookie);
+    }
+
+    private void clearRefreshTokenCookie(HttpServletResponse response) {
+        Cookie cookie = new Cookie("refreshToken", "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        cookie.setPath("/api/auth/refresh");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+    }
+
+    private String extractRefreshTokenCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) {
+            throw new RuntimeException("리프레시 토큰이 없습니다.");
+        }
+        for (Cookie cookie : request.getCookies()) {
+            if ("refreshToken".equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        throw new RuntimeException("리프레시 토큰이 없습니다.");
     }
 
     @PostMapping("/email-verify/request")

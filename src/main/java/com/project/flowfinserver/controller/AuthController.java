@@ -8,6 +8,9 @@ import com.project.flowfinserver.service.PasswordResetService;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Duration;
 import java.util.Map;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +24,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private static final int REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60; // 7일
+
+    @Value("${app.cookie.secure}")
+    private boolean cookieSecure;
 
     private final AuthService authService;
     private final PasswordResetService passwordResetService;

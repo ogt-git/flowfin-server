@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthService {
 
+    public record LoginResult(LoginResponse loginResponse, String refreshToken) {}
+    public record RefreshResult(String newAccessToken, String newRefreshToken) {}
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
@@ -43,7 +46,7 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public LoginResponse login(LoginRequest request) {
+    public LoginResult login(LoginRequest request) {
         String emailHash = encryptionUtil.hash(request.getEmail());
         User user = userRepository.findByEmailHash(emailHash)
                 .orElseThrow(() -> new AuthException("이메일 또는 비밀번호가 올바르지 않습니다."));
@@ -56,12 +59,13 @@ public class AuthService {
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
         redisTokenService.saveRefreshToken(user.getId(), refreshToken);
 
-        return new LoginResponse(user.getId(), accessToken, refreshToken, user.getName(),
+        LoginResponse loginResponse = new LoginResponse(user.getId(), accessToken, user.getName(),
                 MaskingUtil.maskEmail(user.getEmail()), user.getRiskType());
+        return new LoginResult(loginResponse, refreshToken);
     }
 
     // RTR: 리프레시 토큰 검증 → 새 토큰 쌍 발급, 기존 토큰 즉시 삭제
-    public TokenResponse refresh(String refreshToken) {
+    public RefreshResult refresh(String refreshToken) {
         if (!jwtUtil.isValid(refreshToken)) {
             throw new RuntimeException("유효하지 않은 리프레시 토큰입니다.");
         }
@@ -86,7 +90,7 @@ public class AuthService {
         String newRefreshToken = jwtUtil.generateRefreshToken(user.getEmail());
         redisTokenService.saveRefreshToken(user.getId(), newRefreshToken);
 
-        return new TokenResponse(newAccessToken, newRefreshToken);
+        return new RefreshResult(newAccessToken, newRefreshToken);
     }
 
     public void logout(Long userId) {

@@ -67,20 +67,20 @@ public class AuthService {
     // RTR: 리프레시 토큰 검증 → 새 토큰 쌍 발급, 기존 토큰 즉시 삭제
     public RefreshResult refresh(String refreshToken) {
         if (!jwtUtil.isValid(refreshToken)) {
-            throw new RuntimeException("유효하지 않은 리프레시 토큰입니다.");
+            throw new AuthException("유효하지 않은 리프레시 토큰입니다.");
         }
 
         String email     = jwtUtil.getEmail(refreshToken);
         String emailHash = encryptionUtil.hash(email);
         User user = userRepository.findByEmailHash(emailHash)
-                .orElseThrow(() -> new RuntimeException("존재하지 않는 사용자입니다."));
+                .orElseThrow(() -> new AuthException("존재하지 않는 사용자입니다."));
 
         String storedToken = redisTokenService.getRefreshToken(user.getId());
 
         // 토큰 불일치 → 탈취 의심, Redis 토큰 즉시 삭제 후 차단
         if (!refreshToken.equals(storedToken)) {
             redisTokenService.deleteRefreshToken(user.getId());
-            throw new RuntimeException("리프레시 토큰이 일치하지 않습니다. 다시 로그인해주세요.");
+            throw new AuthException("리프레시 토큰이 일치하지 않습니다. 다시 로그인해주세요.");
         }
 
         // 기존 토큰 삭제 후 새 토큰 쌍 발급 (RTR)

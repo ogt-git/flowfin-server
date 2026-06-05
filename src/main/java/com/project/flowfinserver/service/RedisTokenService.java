@@ -1,5 +1,6 @@
 package com.project.flowfinserver.service;
 
+import com.project.flowfinserver.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -11,16 +12,16 @@ import java.util.concurrent.TimeUnit;
 public class RedisTokenService {
 
     private static final String REFRESH_TOKEN_PREFIX = "refresh:token:";
-    private static final long REFRESH_TTL_DAYS = 1;
 
     private final RedisTemplate<String, String> redisTemplate;
+    private final JwtUtil jwtUtil;
 
     public void saveRefreshToken(Long userId, String token) {
         redisTemplate.opsForValue().set(
                 REFRESH_TOKEN_PREFIX + userId,
                 token,
-                REFRESH_TTL_DAYS,
-                TimeUnit.DAYS
+                jwtUtil.getRefreshExpirationMs(),
+                TimeUnit.MILLISECONDS
         );
     }
 

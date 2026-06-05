@@ -80,7 +80,9 @@
       "Bash(grep -E \"\\\\\\\\.java$\")",
       "Bash(./gradlew.bat compileJava *)",
       "Bash(grep -i \"\\\\.java$\")",
-      "Bash(wait)"
+      "Bash(wait)",
+      "Bash(gh api *)",
+      "Bash(git fetch *)"
     ]
   }
 }

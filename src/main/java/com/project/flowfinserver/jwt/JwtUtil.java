@@ -15,11 +15,16 @@ import java.util.Date;
 public class JwtUtil {
 
     private final SecretKey key;
-    private static final long ACCESS_TOKEN_EXPIRATION  = 1000L * 60 * 30;          // 30분
-    private static final long REFRESH_TOKEN_EXPIRATION = 1000L * 60 * 60 * 24;     // 1일
+    private final long accessExpirationMs;
+    private final long refreshExpirationMs;
 
-    public JwtUtil(@Value("${jwt.secret}") String secret) {
+    public JwtUtil(
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.expiration-ms}") long accessExpirationMs,
+            @Value("${jwt.refresh-expiration-ms}") long refreshExpirationMs) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.accessExpirationMs = accessExpirationMs;
+        this.refreshExpirationMs = refreshExpirationMs;
     }
 
     public String generateAccessToken(String email, Long userId) {
@@ -27,7 +32,7 @@ public class JwtUtil {
                 .subject(email)
                 .claim("uid", userId)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRATION))
+                .expiration(new Date(System.currentTimeMillis() + accessExpirationMs))
                 .signWith(key)
                 .compact();
     }
@@ -36,9 +41,13 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(email)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRATION))
+                .expiration(new Date(System.currentTimeMillis() + refreshExpirationMs))
                 .signWith(key)
                 .compact();
+    }
+
+    public long getRefreshExpirationMs() {
+        return refreshExpirationMs;
     }
 
     public String getEmail(String token) {

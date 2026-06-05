@@ -6,7 +6,6 @@ import com.project.flowfinserver.dto.LoginResponse;
 import com.project.flowfinserver.dto.SignupRequest;
 import com.project.flowfinserver.jwt.JwtUtil;
 import com.project.flowfinserver.repository.UserRepository;
-import com.project.flowfinserver.service.RedisTokenService;
 import com.project.flowfinserver.util.AesEncryptionUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +30,7 @@ class AuthServiceTest {
     @Mock JwtUtil jwtUtil;
     @Mock AesEncryptionUtil encryptionUtil;
     @Mock RedisTokenService redisTokenService;
+    @Mock EmailVerificationService emailVerificationService;
 
     @InjectMocks
     AuthService authService;
@@ -40,6 +40,8 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(req, "email", email);
         ReflectionTestUtils.setField(req, "password", password);
         ReflectionTestUtils.setField(req, "name", name);
+        ReflectionTestUtils.setField(req, "termsVersion", "1.0");
+        ReflectionTestUtils.setField(req, "verificationToken", "valid-token");
         return req;
     }
 
@@ -51,27 +53,44 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("signup — 신규 이메일: 해시 검증 후 저장")
+    @DisplayName("signup — 신규 이메일: 이메일 인증 검증 후 저장")
     void signup_success() {
         SignupRequest request = buildSignupRequest("test@flowfin.test", "password123!", "홍길동");
+        willDoNothing().given(emailVerificationService).validateAndConsume("test@flowfin.test", "valid-token");
         given(encryptionUtil.hash("test@flowfin.test")).willReturn("hashed-email");
         given(userRepository.existsByEmailHash("hashed-email")).willReturn(false);
 
         authService.signup(request);
 
+        then(emailVerificationService).should(times(1)).validateAndConsume("test@flowfin.test", "valid-token");
         then(userRepository).should(times(1)).save(any(User.class));
     }
 
     @Test
-    @DisplayName("signup — 이미 존재하는 이메일: RuntimeException 발생")
+    @DisplayName("signup — 이미 존재하는 이메일: DuplicateEmailException 발생")
     void signup_duplicateEmail_throwsException() {
         SignupRequest request = buildSignupRequest("dup@flowfin.test", "pass", "이중복");
+        willDoNothing().given(emailVerificationService).validateAndConsume("dup@flowfin.test", "valid-token");
         given(encryptionUtil.hash("dup@flowfin.test")).willReturn("dup-hash");
         given(userRepository.existsByEmailHash("dup-hash")).willReturn(true);
 
         assertThatThrownBy(() -> authService.signup(request))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("이미 존재하는 이메일");
+                .hasMessageContaining("이미 사용 중인 이메일");
+
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("signup — 이메일 인증 토큰 무효: IllegalStateException 발생")
+    void signup_invalidVerificationToken_throwsException() {
+        SignupRequest request = buildSignupRequest("test@flowfin.test", "password123!", "홍길동");
+        willThrow(new IllegalStateException("이메일 인증이 완료되지 않았습니다. 다시 인증해주세요."))
+                .given(emailVerificationService).validateAndConsume("test@flowfin.test", "valid-token");
+
+        assertThatThrownBy(() -> authService.signup(request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("이메일 인증이 완료되지 않았습니다");
 
         then(userRepository).should(never()).save(any());
     }
@@ -106,7 +125,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("존재하지 않는 이메일");
+                .hasMessageContaining("이메일 또는 비밀번호가 올바르지 않습니다");
     }
 
     @Test
@@ -121,6 +140,6 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("비밀번호가 일치하지 않습니다");
+                .hasMessageContaining("이메일 또는 비밀번호가 올바르지 않습니다");
     }
 }

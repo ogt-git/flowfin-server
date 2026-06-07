@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flowfin-app
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - /etc/flowfin/prod.env
+    restart: unless-stopped

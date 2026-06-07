@@ -6,9 +6,7 @@
 
 ALTER DATABASE flowfin CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS 'flowfin-admin'@'%' IDENTIFIED BY 'flowfin1234';
-GRANT ALL PRIVILEGES ON flowfin.* TO 'flowfin-admin'@'%';
-FLUSH PRIVILEGES;
+-- 유저 생성은 docker-compose.yml의 MYSQL_USER / MYSQL_PASSWORD 환경변수로 처리됨
 
 USE flowfin;
 
@@ -23,9 +21,12 @@ CREATE TABLE IF NOT EXISTS users (
     email_hash       VARCHAR(64)  NOT NULL UNIQUE,
     password         VARCHAR(255) NOT NULL,
     name             VARCHAR(50)  NOT NULL,
-    connected_id VARCHAR(255),
-    risk_type    VARCHAR(50),
-    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    connected_id     VARCHAR(255),
+    refresh_token    VARCHAR(500),
+    token_expired_at DATETIME,
+    risk_type        VARCHAR(50),
+    terms_version    VARCHAR(20) NOT NULL DEFAULT '',
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
 -- 카테고리
@@ -57,6 +58,8 @@ CREATE TABLE IF NOT EXISTS codef_connection (
     account_type      VARCHAR(10)  NOT NULL COMMENT 'CARD | STOCK',
     account_number    VARCHAR(50),
     account_password  VARCHAR(255) COMMENT 'STOCK 계좌 비밀번호 (AES-256 암호화)',
+    login_id          VARCHAR(255),
+    login_id_hash     VARCHAR(64),
     is_active         TINYINT(1)   NOT NULL DEFAULT 1,
     created_at        DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
@@ -71,7 +74,7 @@ CREATE TABLE IF NOT EXISTS expense (
     merchant_name      VARCHAR(255) NOT NULL,
     expense_date       DATETIME     NOT NULL,
     category_id        BIGINT,
-    classified_by      VARCHAR(10)  COMMENT 'RULE | AI | USER',
+    classified_by      VARCHAR(10)  COMMENT 'RULE | AI | USER | PENDING',
     category_confidence INT,
     used_card          VARCHAR(50)  NOT NULL DEFAULT '',
     is_user_modified   TINYINT(1)   NOT NULL DEFAULT 0,
@@ -79,6 +82,7 @@ CREATE TABLE IF NOT EXISTS expense (
     created_at         DATETIME     DEFAULT CURRENT_TIMESTAMP,
     expense_type        ENUM('FIXED','VARIABLE','IRREGULAR') DEFAULT 'VARIABLE',
     UNIQUE KEY uq_expense (user_id, expense_date, merchant_name, amount, used_card),
+    INDEX idx_expense_classified_by_created_at (classified_by, created_at),
     FOREIGN KEY (user_id)     REFERENCES users (id),
     FOREIGN KEY (category_id) REFERENCES category (id)
 );
@@ -132,11 +136,33 @@ CREATE TABLE IF NOT EXISTS asset_item (
 
 -- 포트폴리오
 CREATE TABLE IF NOT EXISTS portfolio (
-    id                  INT         AUTO_INCREMENT PRIMARY KEY,
-    user_id             BIGINT      NOT NULL,
-    recommended_assets  JSON,
-    investable_amount   BIGINT,
-    created_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    id                   INT          AUTO_INCREMENT PRIMARY KEY,
+    user_id              BIGINT       NOT NULL,
+    status               VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | COMPLETED | FAILED',
+    investable_amount    BIGINT,
+    recommended_assets   JSON,
+    summary              TEXT,
+    ai_diagnosis         TEXT,
+    recommend_input_hash VARCHAR(64),
+    failed_reason        VARCHAR(255),
+    portfolio_risk_type  VARCHAR(50),
+    created_at           DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    updated_at           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+-- 수동 자산 입력
+CREATE TABLE IF NOT EXISTS manual_asset (
+    id              BIGINT       AUTO_INCREMENT PRIMARY KEY,
+    user_id         BIGINT       NOT NULL,
+    asset_type      VARCHAR(20)  NOT NULL COMMENT 'DEPOSIT | SAVINGS | REAL_ESTATE | CASH | PENSION | ETC',
+    item_name       VARCHAR(100),
+    purchase_amount BIGINT,
+    amount          BIGINT       NOT NULL,
+    purchase_date   DATE,
+    memo            VARCHAR(255),
+    created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 

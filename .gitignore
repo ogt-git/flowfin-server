@@ -41,6 +41,10 @@ out/
 *.yaml
 docker-compose*.yml
 docker-compose*.yaml
+!docker-compose.yml
+!docker-compose.prod.yml
+!src/main/resources/application.yml
+!src/main/resources/application-prod.yml
 
 ### Properties ###
 *.properties
@@ -49,6 +53,8 @@ docker-compose*.yaml
 ### Env ###
 .env
 !.env.example
+prod.env
+!prod.env.example
 
 ### Properties (로컬 전용) ###
 application-local.properties
@@ -64,4 +70,9 @@ Thumbs.db
 
 ### jinyeob ###
 application.properties
-application.yml
+
+### Security ###
+*.pem
+
+### Claude Code (로컬 전용) ###
+.claude/settings.local.json

@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: flowfin-server
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:flowfin}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useUnicode=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+          max-wait: 1000ms
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# CODEF API Setting
+codef:
+  client-id: ${CODEF_CLIENT_ID}
+  client-secret: ${CODEF_CLIENT_SECRET}
+  public-key: ${CODEF_PUBLIC_KEY}
+  service-type: 1
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-ms: ${JWT_EXPIRATION_MS:1800000}                # AT 30분 (ms)
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:86400000} # RT 1일 (ms)
+
+# AES
+encrypt:
+  aes:
+    secret-key: ${AES_SECRET_KEY}
+
+# OpenAI
+openai:
+  api-key: ${OPENAI_API_KEY}
+  model:
+    classification: ${OPENAI_MODEL_CLASSIFICATION:gpt-4.1-nano}
+    portfolio: ${OPENAI_MODEL_PORTFOLIO:gpt-4o}
+  classification:
+    confidence-threshold: ${OPENAI_CLASSIFICATION_THRESHOLD:60}
+    timeout-ms: ${OPENAI_CLASSIFICATION_TIMEOUT:10000}
+    max-retries: ${OPENAI_CLASSIFICATION_MAX_RETRIES:3}
+  portfolio:
+    timeout-ms: ${OPENAI_PORTFOLIO_TIMEOUT:60000}
+
+# CORS
+cors:
+  allowed-origins: https://flowfin.site
+
+# Cookie
+app:
+  cookie:
+    secure: true
+    same-site: Lax

@@ -1,0 +1,69 @@
+# src/main/resources/application-prod.yml
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME}?useSSL=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useUnicode=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  mail:
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+          max-wait: 1000ms
+
+server:
+  port: 8080
+
+# 전부 환경변수 주입
+encrypt:
+  aes:
+    secret-key: ${AES_SECRET_KEY}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-ms: ${JWT_EXPIRATION_MS}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
+
+codef:
+  client-id: ${CODEF_CLIENT_ID}
+  client-secret: ${CODEF_CLIENT_SECRET}
+  public-key: ${CODEF_PUBLIC_KEY}
+  service-type: 1
+
+openai:
+  api-key: ${OPENAI_API_KEY}
+  model:
+    classification: ${OPENAI_MODEL_CLASSIFICATION:gpt-4.1-nano}
+    portfolio: ${OPENAI_MODEL_PORTFOLIO:gpt-4o}
+
+cors:
+  allowed-origins: https://flowfin.site
+
+app:
+  cookie:
+    secure: true
+    same-site: None
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.project.flowfinserver: INFO

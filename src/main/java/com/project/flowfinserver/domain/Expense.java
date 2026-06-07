@@ -14,6 +14,10 @@ import java.time.LocalDateTime;
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_expense",
                 columnNames = {"user_id", "expense_date", "merchant_name", "amount", "used_card"}
+        ),
+        indexes = @Index(
+                name = "idx_expense_classified_by_created_at",
+                columnList = "classified_by, created_at"
         )
 )
 @Getter

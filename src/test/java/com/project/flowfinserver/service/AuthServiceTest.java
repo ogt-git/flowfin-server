@@ -4,6 +4,7 @@ import com.project.flowfinserver.domain.User;
 import com.project.flowfinserver.dto.LoginRequest;
 import com.project.flowfinserver.dto.LoginResponse;
 import com.project.flowfinserver.dto.SignupRequest;
+import com.project.flowfinserver.service.AuthService.LoginResult;
 import com.project.flowfinserver.jwt.JwtUtil;
 import com.project.flowfinserver.repository.UserRepository;
 import com.project.flowfinserver.util.AesEncryptionUtil;
@@ -109,7 +110,8 @@ class AuthServiceTest {
         given(jwtUtil.generateAccessToken(eq("test@flowfin.test"), anyLong())).willReturn("access-token");
         given(jwtUtil.generateRefreshToken("test@flowfin.test")).willReturn("refresh-token");
 
-        LoginResponse response = authService.login(request);
+        LoginResult result = authService.login(request);
+        LoginResponse response = result.loginResponse();
 
         assertThat(response.getUserId()).isEqualTo(1L);
         assertThat(response.getAccessToken()).isEqualTo("access-token");

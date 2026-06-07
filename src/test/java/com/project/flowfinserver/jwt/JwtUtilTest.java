@@ -21,7 +21,7 @@ class JwtUtilTest {
 
     @BeforeEach
     void setUp() {
-        jwtUtil = new JwtUtil(SECRET);
+        jwtUtil = new JwtUtil(SECRET, 1_800_000L, 86_400_000L);
     }
 
     @Test

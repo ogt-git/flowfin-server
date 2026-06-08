@@ -8,6 +8,7 @@ import com.project.flowfinserver.repository.*;
 import com.project.flowfinserver.service.CodefSyncService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,7 +30,9 @@ import static org.mockito.Mockito.mock;
 /**
  * CODEF API와 Redis만 Mock, 나머지는 실제 Spring 빈 + Docker MySQL로 동작하는 통합 테스트.
  * @Transactional → 각 테스트 후 DB 자동 롤백
+ * @Tag("integration") → ./gradlew test 기본 실행에서 제외, ./gradlew integrationTest로 별도 실행
  */
+@Tag("integration")
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional

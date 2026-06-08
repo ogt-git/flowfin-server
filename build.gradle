@@ -54,8 +54,36 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+def loadEnv = { task ->
+    def envFile = rootProject.file('.env')
+    if (envFile.exists()) {
+        envFile.readLines().each { line ->
+            def trimmed = line.trim()
+            if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+                def idx = trimmed.indexOf('=')
+                def key = trimmed.substring(0, idx).trim().replaceAll(/^export\s+/, '')
+                def value = trimmed.substring(idx + 1).trim().replaceAll(/^["']|["']$/, '')
+                task.environment(key, value)
+            }
+        }
+    }
+}
+
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+    loadEnv(it)
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'CODEF 등 실제 DB/Redis가 필요한 통합 테스트 실행'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    loadEnv(it)
+    shouldRunAfter tasks.named('test')
 }
 
 tasks.withType(JavaCompile).configureEach {

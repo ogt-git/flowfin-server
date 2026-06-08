@@ -1,0 +1,15 @@
+package com.project.flowfinserver.dto.codef;
+
+import java.time.LocalDateTime;
+
+public record CardBillingDto(
+        String cardCompany,
+        String usedCard,  // resUsedCard: 이용카드 식별자 (빈 값 "" 허용, null 금지)
+        Long amount,
+        String merchantName,
+        LocalDateTime expenseDate,
+        // resPaymentType: "1"=일시불 "2"=할부 "3"=그외 "4"=단기카드대출 "5"=장기카드대출
+        // "4","5"이면 is_excluded=true 처리 (대출성 거래는 지출 제외)
+        // 취소 거래는 resUsedAmount가 음수로 오므로 음수 금액 그대로 저장 (별도 플래그 불필요)
+        String paymentType
+) {}

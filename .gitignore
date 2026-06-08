@@ -36,5 +36,43 @@ out/
 ### VS Code ###
 .vscode/
 
-### Yml ###
+### Yml / Yaml ###
 *.yml
+*.yaml
+docker-compose*.yml
+docker-compose*.yaml
+!docker-compose.yml
+!docker-compose.prod.yml
+!src/main/resources/application.yml
+!src/main/resources/application-prod.yml
+
+### Properties ###
+*.properties
+!gradle/wrapper/gradle-wrapper.properties
+
+### Env ###
+.env
+!.env.example
+prod.env
+!prod.env.example
+
+### Properties (로컬 전용) ###
+application-local.properties
+application-local.yml
+
+### Logs ###
+logs/
+*.log
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### jinyeob ###
+application.properties
+
+### Security ###
+*.pem
+
+### Claude Code (로컬 전용) ###
+.claude/settings.local.json

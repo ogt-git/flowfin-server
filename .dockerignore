@@ -1,0 +1,14 @@
+.git
+.gradle
+build
+out
+.idea
+.env
+prod.env
+*.log
+*.pem
+*.key
+.claude/
+docker/mysql-data
+src/main/resources/application-local.yml
+src/main/resources/application-local.yaml

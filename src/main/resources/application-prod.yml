@@ -50,7 +50,7 @@ openai:
     portfolio: ${OPENAI_MODEL_PORTFOLIO:gpt-4o}
 
 cors:
-  allowed-origins: https://flowfin.site
+  allowed-origins: https://flowfin.kr,https://www.flowfin.kr
 
 app:
   cookie:

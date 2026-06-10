@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 @EnableAsync
+@EnableScheduling
 public class FlowfinServerApplication {
 
     public static void main(String[] args) {

@@ -168,6 +168,15 @@ public class CodefSyncService {
                 skippedCount += counts[1];
             } catch (CodefAccountNotFoundException e) {
                 throw e;
+            } catch (CodefCooldownException e) {
+                log.info("[CODEF Sync] 쿨다운 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
+            } catch (CodefCardUnavailableException e) {
+                log.info("[CODEF Sync] 카드 해지/정지 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
+            } catch (CodefInstitutionUnavailableException e) {
+                log.info("[CODEF Sync] 카드 조회 불가(점검/변경) 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
             } catch (CodefApiException e) {
                 failedAccounts.add(account.getOrganizationCode() + "(code=" + e.getCodefCode() + ")");
             } catch (Exception e) {
@@ -202,6 +211,12 @@ public class CodefSyncService {
                 else skippedCount++;
             } catch (CodefAccountNotFoundException e) {
                 throw e;
+            } catch (CodefCooldownException e) {
+                log.info("[CODEF Sync] 쿨다운 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
+            } catch (CodefInstitutionUnavailableException e) {
+                log.info("[CODEF Sync] 증권 조회 불가(점검) 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
             } catch (CodefApiException e) {
                 failedAccounts.add(account.getOrganizationCode() + "(code=" + e.getCodefCode() + ")");
             } catch (Exception e) {
@@ -226,6 +241,12 @@ public class CodefSyncService {
         String resultCode = root.path("result").path("code").asText();
         if (!CODEF_SUCCESS.equals(resultCode)) {
             String message = root.path("result").path("message").asText();
+            if (CodefErrorClassifier.classify(resultCode) == CodefErrorType.EMPTY_RESULT) {
+                log.info("[CODEF] 증권 조회 결과 없음 code={} org={}", resultCode, organizationCode);
+                return CodefSyncResultDto.builder()
+                        .savedCount(0).skippedCount(0).failedAccounts(List.of())
+                        .syncedAt(LocalDateTime.now()).build();
+            }
             throw new CodefApiException(resultCode, message);
         }
 
@@ -312,6 +333,12 @@ public class CodefSyncService {
                 log.warn("[CF-12201] 중복 로그인 세션 — userId={} org={} connectedId={}",
                         userId, organizationCode, MaskingUtil.maskConnectedId(connectedId));
             }
+            if (CodefErrorClassifier.classify(resultCode) == CodefErrorType.EMPTY_RESULT) {
+                log.info("[CODEF] 카드 조회 결과 없음 code={} org={}", resultCode, organizationCode);
+                return CodefSyncResultDto.builder()
+                        .savedCount(0).skippedCount(0).failedAccounts(List.of())
+                        .syncedAt(LocalDateTime.now()).build();
+            }
             throw new CodefApiException(resultCode, message);
         }
 
@@ -375,9 +402,18 @@ public class CodefSyncService {
             }
             case RATE_LIMIT_ERROR -> log.warn("[CodefError] 요청 한도 초과 — 건너뜀 connectionId={}", conn.getId());
             case INSTITUTION_UNAVAILABLE -> {
-                log.warn("[CodefError] 금융기관 조회 불가 — 연동 유지, 재시도 없음 code={} connectionId={}", errorCode, conn.getId());
+                log.warn("[CodefError] 금융기관 조회 불가(점검/변경) — 연동 유지, 재시도 없음 code={} connectionId={}", errorCode, conn.getId());
                 throw new CodefInstitutionUnavailableException(errorCode);
             }
+            case COOLDOWN -> {
+                log.warn("[CodefError] 쿨다운 — 즉시 재시도 금지, 연동 유지 code={} connectionId={}", errorCode, conn.getId());
+                throw new CodefCooldownException(errorCode);
+            }
+            case CARD_UNAVAILABLE -> {
+                log.warn("[CodefError] 카드 해지/정지 — 해당 카드 스킵, 연동 유지 code={} connectionId={}", errorCode, conn.getId());
+                throw new CodefCardUnavailableException(errorCode);
+            }
+            case EMPTY_RESULT -> log.info("[CodefError] 조회 결과 없음 — 빈 결과 반환 code={} connectionId={}", errorCode, conn.getId());
             case PERMANENT_ERROR, UNKNOWN -> {
                 log.error("[CodefError] 영구/미분류 오류 — 연동 비활성화 connectionId={}", conn.getId());
                 deactivateById(conn.getId());

@@ -8,22 +8,33 @@ public final class CodefErrorClassifier {
 
     private static final Set<String> AUTH_ERROR_CODES = Set.of(
             "CF-04008", "CF-04010", "CF-04019", "CF-04038",
-            "CF-12801", "CF-12899"
+            "CF-12899"
     );
 
     private static final Set<String> AUTH_UNRECOVERABLE_CODES = Set.of(
-            "CF-12802", "CF-12806"
+            "CF-12802", "CF-12806",
+            "CF-12801", "CF-12800", "CF-12803",  // 금융사 비밀번호/아이디 오류 — updateAccount로 복구 불가
+            "CF-12834", "CF-12833",               // 계정 잠김 / 비밀번호 만료
+            "CF-13031", "CF-13032"                // 증권 계좌 비밀번호 오류/잠금
+    );
+
+    // 중복 로그인·부하 제한 — 즉시 재시도 금지, 연동 유지
+    private static final Set<String> COOLDOWN_CODES = Set.of(
+            "CF-12201",  // 다른 기기 동시 로그인
+            "CF-01006",  // 중복 로그인 방지 제한
+            "CF-12207",  // 반복 로그인으로 금융기관 측 일시 제한
+            "CF-12106"   // 과도한 시스템 부하 방지 제한
     );
 
     private static final Set<String> TRANSIENT_ERROR_CODES = Set.of(
             "CF-01002", "CF-01004", "CF-01007", "CF-00016",
-            "CF-01006", "CF-12003", "CF-12104", "CF-12703",
-            "CF-12201"
+            "CF-12003", "CF-12104", "CF-12703",
+            "CF-12107"  // 카드 거래내역 데이터 처리 오류
     );
 
-
     private static final Set<String> INSTITUTION_UNAVAILABLE_CODES = Set.of(
-            "CF-12701", "CF-12710", "CF-12040"
+            "CF-12701", "CF-12710", "CF-12040",
+            "CF-12041"  // 증권사 시스템 점검 시간 (새벽 배치 충돌 가능)
     );
 
     private static final Set<String> RATE_LIMIT_CODES = Set.of(
@@ -31,15 +42,29 @@ public final class CodefErrorClassifier {
     );
 
     private static final Set<String> PERMANENT_ERROR_CODES = Set.of(
-            "CF-04000", "CF-04015"
+            "CF-04000", "CF-04015",
+            "CF-13010", "CF-13013"  // 증권 계좌 해지/존재하지 않는 계좌
+    );
+
+    // 카드 해지·정지 — connectedId는 유효하므로 연동 유지, 해당 카드만 스킵
+    private static final Set<String> CARD_UNAVAILABLE_CODES = Set.of(
+            "CF-13101", "CF-13110"
+    );
+
+    // 조회 결과 없음 — 에러가 아닌 정상 빈 결과
+    private static final Set<String> EMPTY_RESULT_CODES = Set.of(
+            "CF-03999", "CF-12109", "CF-12111", "CF-13025", "CF-13105"
     );
 
     private CodefErrorClassifier() {}
 
     public static CodefErrorType classify(String errorCode) {
         if (errorCode == null) return CodefErrorType.UNKNOWN;
-        if (AUTH_ERROR_CODES.contains(errorCode))               return CodefErrorType.AUTH_ERROR;
+        if (EMPTY_RESULT_CODES.contains(errorCode))              return CodefErrorType.EMPTY_RESULT;
+        if (CARD_UNAVAILABLE_CODES.contains(errorCode))          return CodefErrorType.CARD_UNAVAILABLE;
+        if (AUTH_ERROR_CODES.contains(errorCode))                return CodefErrorType.AUTH_ERROR;
         if (AUTH_UNRECOVERABLE_CODES.contains(errorCode))        return CodefErrorType.AUTH_UNRECOVERABLE;
+        if (COOLDOWN_CODES.contains(errorCode))                  return CodefErrorType.COOLDOWN;
         if (TRANSIENT_ERROR_CODES.contains(errorCode))           return CodefErrorType.TRANSIENT_ERROR;
         if (RATE_LIMIT_CODES.contains(errorCode))                return CodefErrorType.RATE_LIMIT_ERROR;
         if (PERMANENT_ERROR_CODES.contains(errorCode))           return CodefErrorType.PERMANENT_ERROR;

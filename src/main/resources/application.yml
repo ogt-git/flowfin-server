@@ -79,7 +79,7 @@ openai:
 
 # CORS
 cors:
-  allowed-origins: https://flowfin.site
+  allowed-origins: https://flowfin.kr,https://www.flowfin.kr
 
 # Cookie
 app:

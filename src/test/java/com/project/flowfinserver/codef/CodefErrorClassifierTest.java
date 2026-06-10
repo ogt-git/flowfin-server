@@ -16,7 +16,6 @@ class CodefErrorClassifierTest {
             "CF-04010, AUTH_ERROR",
             "CF-04019, AUTH_ERROR",
             "CF-04038, AUTH_ERROR",
-            "CF-12801, AUTH_ERROR",
             "CF-12899, AUTH_ERROR"
     })
     void authError(String code, CodefErrorType expected) {
@@ -27,9 +26,28 @@ class CodefErrorClassifierTest {
     @DisplayName("AUTH_UNRECOVERABLE 코드 분류")
     @CsvSource({
             "CF-12802, AUTH_UNRECOVERABLE",
-            "CF-12806, AUTH_UNRECOVERABLE"
+            "CF-12806, AUTH_UNRECOVERABLE",
+            "CF-12801, AUTH_UNRECOVERABLE",
+            "CF-12800, AUTH_UNRECOVERABLE",
+            "CF-12803, AUTH_UNRECOVERABLE",
+            "CF-12834, AUTH_UNRECOVERABLE",
+            "CF-12833, AUTH_UNRECOVERABLE",
+            "CF-13031, AUTH_UNRECOVERABLE",
+            "CF-13032, AUTH_UNRECOVERABLE"
     })
     void authUnrecoverable(String code, CodefErrorType expected) {
+        assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @DisplayName("COOLDOWN 코드 분류")
+    @CsvSource({
+            "CF-12201, COOLDOWN",
+            "CF-01006, COOLDOWN",
+            "CF-12207, COOLDOWN",
+            "CF-12106, COOLDOWN"
+    })
+    void cooldown(String code, CodefErrorType expected) {
         assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
     }
 
@@ -40,10 +58,10 @@ class CodefErrorClassifierTest {
             "CF-01004, TRANSIENT_ERROR",
             "CF-01007, TRANSIENT_ERROR",
             "CF-00016, TRANSIENT_ERROR",
-            "CF-01006, TRANSIENT_ERROR",
             "CF-12003, TRANSIENT_ERROR",
             "CF-12104, TRANSIENT_ERROR",
-            "CF-12703, TRANSIENT_ERROR"
+            "CF-12703, TRANSIENT_ERROR",
+            "CF-12107, TRANSIENT_ERROR"
     })
     void transientError(String code, CodefErrorType expected) {
         assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
@@ -64,9 +82,45 @@ class CodefErrorClassifierTest {
     @DisplayName("PERMANENT_ERROR 코드 분류")
     @CsvSource({
             "CF-04000, PERMANENT_ERROR",
-            "CF-04015, PERMANENT_ERROR"
+            "CF-04015, PERMANENT_ERROR",
+            "CF-13010, PERMANENT_ERROR",
+            "CF-13013, PERMANENT_ERROR"
     })
     void permanentError(String code, CodefErrorType expected) {
+        assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @DisplayName("CARD_UNAVAILABLE 코드 분류")
+    @CsvSource({
+            "CF-13101, CARD_UNAVAILABLE",
+            "CF-13110, CARD_UNAVAILABLE"
+    })
+    void cardUnavailable(String code, CodefErrorType expected) {
+        assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @DisplayName("EMPTY_RESULT 코드 분류")
+    @CsvSource({
+            "CF-03999, EMPTY_RESULT",
+            "CF-12109, EMPTY_RESULT",
+            "CF-12111, EMPTY_RESULT",
+            "CF-13025, EMPTY_RESULT",
+            "CF-13105, EMPTY_RESULT"
+    })
+    void emptyResult(String code, CodefErrorType expected) {
+        assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @DisplayName("INSTITUTION_UNAVAILABLE 코드 분류")
+    @CsvSource({
+            "CF-12701, INSTITUTION_UNAVAILABLE",
+            "CF-12710, INSTITUTION_UNAVAILABLE",
+            "CF-12041, INSTITUTION_UNAVAILABLE"
+    })
+    void institutionUnavailable(String code, CodefErrorType expected) {
         assertThat(CodefErrorClassifier.classify(code)).isEqualTo(expected);
     }
 

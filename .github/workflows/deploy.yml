@@ -1,0 +1,90 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+
+            echo "1. Write production env"
+            sudo mkdir -p /etc/flowfin
+
+            cat > /tmp/flowfin-prod.env <<'EOF'
+            SPRING_PROFILES_ACTIVE=prod
+
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+
+            REDIS_HOST=${{ secrets.REDIS_HOST }}
+            REDIS_PORT=${{ secrets.REDIS_PORT }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+
+            MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}
+            MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
+
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRATION_MS=${{ secrets.JWT_EXPIRATION_MS }}
+            JWT_REFRESH_EXPIRATION_MS=${{ secrets.JWT_REFRESH_EXPIRATION_MS }}
+
+            AES_SECRET_KEY=${{ secrets.AES_SECRET_KEY }}
+
+            CODEF_CLIENT_ID=${{ secrets.CODEF_CLIENT_ID }}
+            CODEF_CLIENT_SECRET=${{ secrets.CODEF_CLIENT_SECRET }}
+            CODEF_PUBLIC_KEY=${{ secrets.CODEF_PUBLIC_KEY }}
+
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            OPENAI_MODEL_CLASSIFICATION=${{ secrets.OPENAI_MODEL_CLASSIFICATION }}
+            OPENAI_MODEL_PORTFOLIO=${{ secrets.OPENAI_MODEL_PORTFOLIO }}
+
+            JAVA_TOOL_OPTIONS=-Xmx512m
+            EOF
+
+            sudo install -m 600 -o root -g root /tmp/flowfin-prod.env /etc/flowfin/prod.env
+            rm -f /tmp/flowfin-prod.env
+
+            echo "2. Update source code"
+            cd ~/flowfin-server
+            git checkout main
+            git pull --ff-only origin main
+
+            echo "3. Build and restart Docker containers"
+            docker compose --env-file /etc/flowfin/prod.env -f docker-compose.prod.yml up -d --build
+
+            echo "4. Show container status"
+            docker ps --filter "name=flowfin"
+
+            echo "5. Health check"
+            for i in {1..30}; do
+              if curl -fsS https://flowfin.kr/api/health > /dev/null; then
+                echo "Health check passed"
+                exit 0
+              fi
+              echo "Waiting for app... attempt $i"
+              sleep 2
+            done
+
+            echo "Health check failed"
+            docker logs --tail 200 flowfin-app
+            exit 1
+            

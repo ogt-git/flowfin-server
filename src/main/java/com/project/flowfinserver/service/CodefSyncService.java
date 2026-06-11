@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -254,14 +255,18 @@ public class CodefSyncService {
         JsonNode itemList = data.path("resItemList");
 
         long totalAsset = 0L;
-        int skippedCount = 0;
-        List<StockItemDto> items = new ArrayList<>();
-        if (itemList.isArray()) {
+        int invalidSkippedCount = 0;  // resResultCode=0 또는 itemCode 없음 — 응답 신뢰 불가 신호
+        int zeroHoldingCount = 0;     // 전량 매도로 판단된 0값 종목 수
+        List<StockItemDto> holdingItems = new ArrayList<>();
+        Set<String> holdingItemCodes = new HashSet<>();
+        boolean itemListValid = itemList.isArray();
+
+        if (itemListValid) {
             for (JsonNode item : itemList) {
-                // 종목 조회 실패 건 skip
+                // 종목 조회 실패 건 — 응답 신뢰 불가
                 if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
                     log.debug("[CODEF] resResultCode=0 skip itemName={}", firstNonEmpty(item, "resItemName"));
-                    skippedCount++;
+                    invalidSkippedCount++;
                     continue;
                 }
 
@@ -281,28 +286,39 @@ public class CodefSyncService {
                     purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
                     valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
                 }
-                totalAsset += valuationAmt;
 
+                // itemCode 없으면 UNIQUE 제약 키 없음 — 응답 신뢰 불가
                 String itemCode = firstNonEmpty(item, "resItemCode");
                 if (itemCode.isBlank()) {
                     log.debug("[CODEF] itemCode 없음 skip itemName={}", firstNonEmpty(item, "resItemName"));
-                    skippedCount++;
+                    invalidSkippedCount++;
                     continue;
                 }
+
+                // 전량 매도 종목: 수량·매입금액·평가금액 모두 0 — 보유 목록에서 제외
+                int quantity = (int) parseLongField(item, "resQuantity");
+                if (quantity <= 0 && purchaseAmt == 0 && valuationAmt == 0) {
+                    log.debug("[CODEF] 전량 매도 종목 제외 org={} itemCode={}", organizationCode, itemCode);
+                    zeroHoldingCount++;
+                    continue;
+                }
+
+                totalAsset += valuationAmt;
 
                 String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
                 BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
 
-                items.add(new StockItemDto(
+                holdingItems.add(new StockItemDto(
                         firstNonEmpty(item, "resProductType"),
                         firstNonEmpty(item, "resItemName"),
                         itemCode,
-                        (int) parseLongField(item, "resQuantity"),
+                        quantity,
                         purchaseAmt,
                         valuationAmt,
                         valuationPL,
                         earningsRate
                 ));
+                holdingItemCodes.add(itemCode);
             }
         }
 
@@ -310,12 +326,25 @@ public class CodefSyncService {
         String accountNo = data.path("resAccount").asText("").trim();
 
         StockAssetDto assetDto = new StockAssetDto(organizationCode, accountNo, totalAsset, depositReceived);
-        assetService.syncAssetData(userId, assetDto, items);
+        AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
 
-        log.info("[CODEF] 증권 자산 저장 완료 org={} 종목={}건 skip={}건", organizationCode, items.size(), skippedCount);
+        if (itemListValid && invalidSkippedCount == 0) {
+            // 신뢰 가능한 완전한 응답 — reconcile 삭제 후 upsert
+            assetService.reconcileAndUpsertItems(assetAccount, holdingItems, holdingItemCodes);
+        } else if (!holdingItems.isEmpty()) {
+            // 응답 불완전 — 삭제 없이 upsert만
+            log.warn("[CODEF] 응답 불완전으로 reconcile 스킵 org={} invalidSkip={} itemListValid={}",
+                    organizationCode, invalidSkippedCount, itemListValid);
+            assetService.saveOrUpdateItems(assetAccount, holdingItems);
+        }
+
+        assetService.updateInvestableAmount(userId);
+
+        log.info("[CODEF] 증권 자산 저장 완료 org={} 보유={}건 매도제외={}건 invalidSkip={}건",
+                organizationCode, holdingItems.size(), zeroHoldingCount, invalidSkippedCount);
         return CodefSyncResultDto.builder()
-                .savedCount(items.size())
-                .skippedCount(skippedCount)
+                .savedCount(holdingItems.size())
+                .skippedCount(invalidSkippedCount + zeroHoldingCount)
                 .failedAccounts(List.of())
                 .syncedAt(LocalDateTime.now())
                 .build();
@@ -573,21 +602,25 @@ public class CodefSyncService {
 
             String organization = account.getOrganizationCode();
             long totalAsset = 0L;
-            int skippedItems = 0;
-            List<StockItemDto> items = new ArrayList<>();
-            if (itemList.isArray()) {
+            int invalidSkippedItems = 0;  // resResultCode=0 또는 itemCode 없음 — 응답 신뢰 불가 신호
+            int zeroHoldingCount = 0;     // 전량 매도로 판단된 0값 종목 수
+            List<StockItemDto> holdingItems = new ArrayList<>();
+            Set<String> holdingItemCodes = new HashSet<>();
+            boolean itemListValid = itemList.isArray();
+
+            if (itemListValid) {
                 for (JsonNode item : itemList) {
-                    // 종목 조회 실패 건 skip
+                    // 종목 조회 실패 건 — 응답 신뢰 불가
                     if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
                         log.debug("[CODEF Sync] resResultCode=0 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
-                        skippedItems++;
+                        invalidSkippedItems++;
                         continue;
                     }
-                    // itemCode 없으면 UNIQUE 제약 키 없음 — skip
+                    // itemCode 없으면 UNIQUE 제약 키 없음 — 응답 신뢰 불가
                     String itemCode = firstNonEmpty(item, "resItemCode");
                     if (itemCode.isBlank()) {
                         log.debug("[CODEF Sync] itemCode 없음 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
-                        skippedItems++;
+                        invalidSkippedItems++;
                         continue;
                     }
 
@@ -607,21 +640,31 @@ public class CodefSyncService {
                         purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
                         valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
                     }
+
+                    // 전량 매도 종목: 수량·매입금액·평가금액 모두 0 — 보유 목록에서 제외
+                    int quantity = (int) parseLongField(item, "resQuantity");
+                    if (quantity <= 0 && purchaseAmt == 0 && valuationAmt == 0) {
+                        log.debug("[CODEF Sync] 전량 매도 종목 제외 org={} itemCode={}", organization, itemCode);
+                        zeroHoldingCount++;
+                        continue;
+                    }
+
                     totalAsset += valuationAmt;
 
                     String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
                     BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
 
-                    items.add(new StockItemDto(
+                    holdingItems.add(new StockItemDto(
                             firstNonEmpty(item, "resProductType"),
                             firstNonEmpty(item, "resItemName"),
                             itemCode,
-                            (int) parseLongField(item, "resQuantity"),
+                            quantity,
                             purchaseAmt,
                             valuationAmt,
                             valuationPL,
                             earningsRate
                     ));
+                    holdingItemCodes.add(itemCode);
                 }
             }
 
@@ -629,11 +672,19 @@ public class CodefSyncService {
             StockAssetDto assetDto = new StockAssetDto(
                     organization, account.getAccountNumber(), totalAsset, depositReceived);
             AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
-            if (!items.isEmpty()) {
-                assetService.saveOrUpdateItems(assetAccount, items);
+
+            if (itemListValid && invalidSkippedItems == 0) {
+                // 신뢰 가능한 완전한 응답 — reconcile 삭제 후 upsert
+                assetService.reconcileAndUpsertItems(assetAccount, holdingItems, holdingItemCodes);
+            } else if (!holdingItems.isEmpty()) {
+                // 응답 불완전(itemList 비정상 또는 조회 실패 종목 존재) — 삭제 없이 upsert만
+                log.warn("[CODEF Sync] 응답 불완전으로 reconcile 스킵 org={} invalidSkip={} itemListValid={}",
+                        organization, invalidSkippedItems, itemListValid);
+                assetService.saveOrUpdateItems(assetAccount, holdingItems);
             }
 
-            log.info("[CODEF Sync] 증권 upsert 완료 org={} 종목={}건 skip={}건", account.getOrganizationCode(), items.size(), skippedItems);
+            log.info("[CODEF Sync] 증권 동기화 완료 org={} 보유={}건 매도제외={}건 invalidSkip={}건",
+                    account.getOrganizationCode(), holdingItems.size(), zeroHoldingCount, invalidSkippedItems);
             return 1;
         } finally {
             stringRedisTemplate.delete(lockKey);

@@ -10,6 +10,7 @@ import com.project.flowfinserver.exception.ErrorCode;
 import com.project.flowfinserver.exception.TooManyRequestsException;
 import com.project.flowfinserver.service.CodefService;
 import com.project.flowfinserver.service.CodefSyncService;
+import com.project.flowfinserver.service.SyncStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,6 +38,7 @@ public class CodefController {
 
     private final CodefService codefService;
     private final CodefSyncService codefSyncService;
+    private final SyncStatusService syncStatusService;
 
     @Operation(summary = "연동 계정 목록 조회", description = "활성화된 CODEF 연동 계정 목록을 반환합니다.")
     @GetMapping("/connections")
@@ -128,6 +130,16 @@ public class CodefController {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(ApiResponse.error(e.getMessage(), "CODEF_COOLDOWN_ACTIVE"));
         }
+    }
+
+    @Operation(summary = "초기 동기화 상태 조회", description = "연동 직후 초기 동기화 진행 상태를 반환합니다. SYNCING / DONE / FAILED")
+    @GetMapping("/sync/status")
+    public ResponseEntity<ApiResponse<String>> getSyncStatus(
+            Authentication authentication,
+            @RequestParam(value = "type", defaultValue = "CARD") String type) {
+        Long userId = (Long) authentication.getPrincipal();
+        String status = syncStatusService.getStatus(userId, type.toUpperCase()).name();
+        return ResponseEntity.ok(ApiResponse.success(status));
     }
 
     // 내부 전용 엔드포인트 — 외부 노출 차단 (소유권 검증 없음, CODEF 한도 소진 위험)

@@ -230,7 +230,7 @@ public class CodefService {
         } else if (connection.getAccountType() == AccountType.STOCK) {
             assetAccountRepository.findByUserIdAndBrokerCode(userId, connection.getOrganizationCode())
                     .ifPresent(account -> {
-                        assetItemRepository.deleteByAccountId(account.getId().longValue());
+                        assetItemRepository.deleteByAccountId(account.getId());
                         assetAccountRepository.delete(account);
                         log.info("[Disconnect] 증권 자산 삭제 완료 userId={} org={}", userId, connection.getOrganizationCode());
                     });

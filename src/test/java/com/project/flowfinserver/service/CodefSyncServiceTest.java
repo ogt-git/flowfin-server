@@ -83,6 +83,23 @@ class CodefSyncServiceTest {
             }
             """;
 
+    private static final String STOCK_FULLY_SOLD_RESPONSE = """
+            {
+              "result": {"code": "CF-00000", "message": "성공"},
+              "data": {
+                "resAccount": "12345678901",
+                "resDepositReceived": "500000",
+                "resItemList": [
+                  {
+                    "resItemName": "삼성전자", "resItemCode": "005930",
+                    "resQuantity": "0", "resValuationAmt": "0",
+                    "resPurchaseAmount": "0", "resValuationPL": "0"
+                  }
+                ]
+              }
+            }
+            """;
+
     private CodefConnectedAccount cardAccount;
     private CodefConnectedAccount stockAccount;
 
@@ -203,7 +220,28 @@ class CodefSyncServiceTest {
         assertThat(result.getSavedCount()).isEqualTo(1);
         assertThat(result.getFailedAccounts()).isEmpty();
         then(assetService).should(times(1)).saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class));
-        then(assetService).should(times(1)).saveOrUpdateItems(eq(mockAccount), anyList());
+        then(assetService).should(times(1)).reconcileAndUpsertItems(eq(mockAccount), anyList(), anySet());
+    }
+
+    @Test
+    @DisplayName("syncStock — 전량 매도 종목은 이름·티커가 있어도 보유 목록에서 제외하고 reconcile")
+    void syncStock_fullySoldItem_reconcilesWithEmptyHoldings() throws Exception {
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), eq("1"), anyLong(), any(TimeUnit.class))).willReturn(true);
+        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
+                .willReturn(List.of(stockAccount));
+        given(codefApiClient.requestProduct(anyString(), any())).willReturn(STOCK_FULLY_SOLD_RESPONSE);
+
+        com.project.flowfinserver.domain.AssetAccount mockAccount =
+                com.project.flowfinserver.domain.AssetAccount.create(TEST_USER_ID, "0240", "12345678901", 0L, 500_000L);
+        given(assetService.saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class))).willReturn(mockAccount);
+
+        CodefSyncResultDto result = codefSyncService.syncStock(TEST_USER_ID);
+
+        assertThat(result.getSavedCount()).isEqualTo(1);
+        assertThat(result.getSkippedCount()).isZero();
+        then(assetService).should(times(1)).reconcileAndUpsertItems(eq(mockAccount), eq(List.of()), eq(java.util.Set.of()));
+        then(assetService).should(never()).saveOrUpdateItems(any(), anyList());
     }
 
     @Test

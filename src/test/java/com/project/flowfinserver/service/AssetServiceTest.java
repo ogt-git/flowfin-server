@@ -135,6 +135,19 @@ class AssetServiceTest {
         assertThat(existingItem.getValuationAmt()).isEqualTo(2_200_000L);
     }
 
+    @Test
+    @DisplayName("reconcileAndUpsertItems — 전량 매도로 보유 코드 없음: 계좌 종목 전체 삭제")
+    void reconcileAndUpsertItems_emptyHoldings_deletesAllAccountItems() {
+        AssetAccount account = AssetAccount.create(USER_ID, BROKER_CODE, ACCOUNT_NO, 0L, 0L);
+        ReflectionTestUtils.setField(account, "id", 1);
+
+        assetService.reconcileAndUpsertItems(account, List.of(), java.util.Set.of());
+
+        then(assetItemRepository).should(times(1)).deleteByAccountId(1);
+        then(assetItemRepository).should(never()).deleteByAccountIdAndItemCodeNotIn(anyInt(), any());
+        then(assetItemRepository).should(never()).save(any(AssetItem.class));
+    }
+
     // ==================== getStocks ====================
 
     @Test

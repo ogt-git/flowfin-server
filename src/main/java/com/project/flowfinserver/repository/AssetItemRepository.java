@@ -12,7 +12,7 @@ import java.util.Optional;
 
 public interface AssetItemRepository extends JpaRepository<AssetItem, Integer> {
 
-    void deleteByAccountId(Long accountId);
+    void deleteByAccountId(Integer accountId);
 
     void deleteAllByUserId(Long userId);
 

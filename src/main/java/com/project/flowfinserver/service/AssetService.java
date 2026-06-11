@@ -100,7 +100,7 @@ public class AssetService {
     public void reconcileAndUpsertItems(AssetAccount account, List<StockItemDto> holdingItems,
                                         Set<String> holdingItemCodes) {
         if (holdingItemCodes.isEmpty()) {
-            assetItemRepository.deleteByAccountId(account.getId().longValue());
+            assetItemRepository.deleteByAccountId(account.getId());
             log.debug("[Asset] 전량 매도 — 계좌 내 종목 전체 삭제 accountId={}", account.getId());
         } else {
             assetItemRepository.deleteByAccountIdAndItemCodeNotIn(account.getId(), holdingItemCodes);

@@ -519,7 +519,6 @@ public class CodefSyncService {
                     params.put("cardPassword", codefApiClient.encryptRSA(cardPw));
                 }
 
-                boolean monthProcessed = false;
                 for (int attempt = 1; attempt <= 3; attempt++) {
                     try {
                         String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
@@ -546,7 +545,11 @@ public class CodefSyncService {
                                 log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
                             }
                         }
-                        monthProcessed = true;
+                        break;
+                    } catch (CodefInstitutionUnavailableException e) {
+                        log.warn("[CODEF Sync] 금융기관 조회 불가 월 스킵 org={} startDate={} code={}",
+                                org, startDate, e.getCodefCode());
+                        totalSkipped++;
                         break;
                     } catch (CodefRetryableException e) {
                         if (attempt < 3) {

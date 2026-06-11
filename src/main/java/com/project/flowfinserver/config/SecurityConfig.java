@@ -65,7 +65,8 @@ public class SecurityConfig {
                             .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh",
                                     "/api/auth/email-verify/request", "/api/auth/email-verify/confirm",
                                     "/api/auth/password-reset/request", "/api/auth/password-reset/confirm").permitAll()
-                            .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll();
+                            .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/health").permitAll();
 
                     if (Arrays.asList(environment.getActiveProfiles()).contains("prod")) {
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").denyAll();

@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -54,8 +55,12 @@ public class CodefSyncService {
     private static final String JEJUCARD_ORG = "0321";  // 제주카드: startDate yyyyMMdd 형식 요구
     private static final long SYNC_LOCK_TTL_SECONDS = 300; // 동기화 락 TTL — 서버 장애 시 자동 해제용
 
-    // 2026-05-20 기준 고정 환율: 1 USD = 1,500 KRW
-    private static final long USD_TO_KRW_RATE = 1_500L;
+    // 고정 환율표 (KRW 기준, 통화 추가 시 여기에만 항목 추가)
+    private static final Map<String, Long> FX_RATES = Map.of(
+            "USD", 1_500L,
+            "CNY",   200L,
+            "JPY",    10L
+    );
     // 평가금액·매입금액·평가손익이 항상 원화로 내려오는 기관
     private static final Set<String> GROUP_A_ORGS = Set.of("0218", "0247", "1247");
     // resAccountCurrency 신뢰 불가 — 전 필드 원화로 간주하는 기관
@@ -778,9 +783,7 @@ public class CodefSyncService {
     }
 
     private long toKrw(long amount, String currencyCode) {
-        if ("USD".equalsIgnoreCase(currencyCode)) {
-            return amount * USD_TO_KRW_RATE;
-        }
-        return amount;
+        long rate = FX_RATES.getOrDefault(currencyCode.toUpperCase(), 1L);
+        return amount * rate;
     }
 }

@@ -26,8 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -88,6 +90,25 @@ public class AssetService {
                     );
         }
         log.debug("[Asset] 종목 upsert 완료 accountId={} count={}", account.getId(), items.size());
+    }
+
+    /**
+     * 신뢰 가능한 CODEF 응답일 때 reconcile + upsert.
+     * holdingItemCodes에 없는 기존 종목(매도 완료)을 삭제하고, 보유 종목만 upsert.
+     */
+    @Transactional
+    public void reconcileAndUpsertItems(AssetAccount account, List<StockItemDto> holdingItems,
+                                        Set<String> holdingItemCodes) {
+        if (holdingItemCodes.isEmpty()) {
+            assetItemRepository.deleteByAccountId(account.getId());
+            log.debug("[Asset] 전량 매도 — 계좌 내 종목 전체 삭제 accountId={}", account.getId());
+        } else {
+            assetItemRepository.deleteByAccountIdAndItemCodeNotIn(account.getId(), holdingItemCodes);
+            log.debug("[Asset] reconcile 삭제 완료 accountId={} 보유종목코드={}", account.getId(), holdingItemCodes);
+        }
+        if (!holdingItems.isEmpty()) {
+            saveOrUpdateItems(account, holdingItems);
+        }
     }
 
     /**

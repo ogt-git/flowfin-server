@@ -51,6 +51,7 @@ public class CodefService {
     private final AssetItemRepository assetItemRepository;
     private final ExpenseStatsCacheManager expenseStatsCacheManager;
     private final AesEncryptionUtil aesEncryptionUtil;
+    private final SyncStatusService syncStatusService;
 
     // self-injection: @Async는 Spring 프록시를 통해야 동작 — 동일 클래스 내 직접 호출 시 비동기 미적용 방지
     @Lazy
@@ -230,7 +231,7 @@ public class CodefService {
         } else if (connection.getAccountType() == AccountType.STOCK) {
             assetAccountRepository.findByUserIdAndBrokerCode(userId, connection.getOrganizationCode())
                     .ifPresent(account -> {
-                        assetItemRepository.deleteByAccountId(account.getId().longValue());
+                        assetItemRepository.deleteByAccountId(account.getId());
                         assetAccountRepository.delete(account);
                         log.info("[Disconnect] 증권 자산 삭제 완료 userId={} org={}", userId, connection.getOrganizationCode());
                     });
@@ -256,6 +257,8 @@ public class CodefService {
     public void triggerInitialSync(Long userId, CodefConnectedAccount connection) {
         log.info("[InitialSync] 최초 동기화 시작 userId={} org={} type={}",
                 userId, connection.getOrganizationCode(), connection.getAccountType());
+        String type = connection.getAccountType() == AccountType.CARD ? "CARD" : "STOCK";
+        syncStatusService.setSyncing(userId, type);
         sleepQuietly(5_000);
         if (connection.getAccountType() == AccountType.CARD) {
             fetchAndSaveCardBilling(userId, connection);
@@ -278,13 +281,16 @@ public class CodefService {
                 } catch (Exception retry) {
                     log.warn("[InitialSync] CARD 재시도 실패 userId={} org={}",
                             userId, connection.getOrganizationCode(), retry);
+                    syncStatusService.setFailed(userId, "CARD");
                     return;
                 }
             } else {
                 log.warn("[InitialSync] CARD 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
+                syncStatusService.setFailed(userId, "CARD");
                 return;
             }
         }
+        syncStatusService.setDone(userId, "CARD");
         log.info("[InitialSync] CARD 최초 동기화 완료 userId={} org={}", userId, connection.getOrganizationCode());
     }
 
@@ -302,13 +308,16 @@ public class CodefService {
                 } catch (Exception retry) {
                     log.warn("[InitialSync] STOCK 재시도 실패 userId={} org={}",
                             userId, connection.getOrganizationCode(), retry);
+                    syncStatusService.setFailed(userId, "STOCK");
                     return;
                 }
             } else {
                 log.warn("[InitialSync] STOCK 최초 동기화 실패 userId={} org={}", userId, connection.getOrganizationCode(), e);
+                syncStatusService.setFailed(userId, "STOCK");
                 return;
             }
         }
+        syncStatusService.setDone(userId, "STOCK");
         log.info("[InitialSync] STOCK 최초 동기화 완료 userId={} org={}", userId, connection.getOrganizationCode());
     }
 

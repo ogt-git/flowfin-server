@@ -42,7 +42,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(allowedOrigins.split(",")));
+        config.setAllowedOrigins(Arrays.stream(allowedOrigins.split(",")).map(String::trim).toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
@@ -56,6 +56,8 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
@@ -63,7 +65,8 @@ public class SecurityConfig {
                             .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh",
                                     "/api/auth/email-verify/request", "/api/auth/email-verify/confirm",
                                     "/api/auth/password-reset/request", "/api/auth/password-reset/confirm").permitAll()
-                            .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll();
+                            .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/health").permitAll();
 
                     if (Arrays.asList(environment.getActiveProfiles()).contains("prod")) {
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").denyAll();

@@ -45,6 +45,9 @@ docker-compose*.yaml
 !docker-compose.prod.yml
 !src/main/resources/application.yml
 !src/main/resources/application-prod.yml
+!.github/
+!.github/**
+
 
 ### Properties ###
 *.properties

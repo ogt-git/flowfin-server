@@ -50,12 +50,19 @@ openai:
     portfolio: ${OPENAI_MODEL_PORTFOLIO:gpt-4o}
 
 cors:
-  allowed-origins: https://flowfin.site
+  allowed-origins: https://flowfin.kr,https://www.flowfin.kr
 
 app:
   cookie:
     secure: true
     same-site: None
+
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        exclude: "*"
 
 springdoc:
   api-docs:

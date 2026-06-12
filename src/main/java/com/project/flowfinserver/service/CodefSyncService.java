@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -168,6 +169,15 @@ public class CodefSyncService {
                 skippedCount += counts[1];
             } catch (CodefAccountNotFoundException e) {
                 throw e;
+            } catch (CodefCooldownException e) {
+                log.info("[CODEF Sync] 쿨다운 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
+            } catch (CodefCardUnavailableException e) {
+                log.info("[CODEF Sync] 카드 해지/정지 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
+            } catch (CodefInstitutionUnavailableException e) {
+                log.info("[CODEF Sync] 카드 조회 불가(점검/변경) 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
             } catch (CodefApiException e) {
                 failedAccounts.add(account.getOrganizationCode() + "(code=" + e.getCodefCode() + ")");
             } catch (Exception e) {
@@ -202,6 +212,12 @@ public class CodefSyncService {
                 else skippedCount++;
             } catch (CodefAccountNotFoundException e) {
                 throw e;
+            } catch (CodefCooldownException e) {
+                log.info("[CODEF Sync] 쿨다운 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
+            } catch (CodefInstitutionUnavailableException e) {
+                log.info("[CODEF Sync] 증권 조회 불가(점검) 스킵 org={} code={}", account.getOrganizationCode(), e.getCodefCode());
+                skippedCount++;
             } catch (CodefApiException e) {
                 failedAccounts.add(account.getOrganizationCode() + "(code=" + e.getCodefCode() + ")");
             } catch (Exception e) {
@@ -226,6 +242,12 @@ public class CodefSyncService {
         String resultCode = root.path("result").path("code").asText();
         if (!CODEF_SUCCESS.equals(resultCode)) {
             String message = root.path("result").path("message").asText();
+            if (CodefErrorClassifier.classify(resultCode) == CodefErrorType.EMPTY_RESULT) {
+                log.info("[CODEF] 증권 조회 결과 없음 code={} org={}", resultCode, organizationCode);
+                return CodefSyncResultDto.builder()
+                        .savedCount(0).skippedCount(0).failedAccounts(List.of())
+                        .syncedAt(LocalDateTime.now()).build();
+            }
             throw new CodefApiException(resultCode, message);
         }
 
@@ -233,14 +255,18 @@ public class CodefSyncService {
         JsonNode itemList = data.path("resItemList");
 
         long totalAsset = 0L;
-        int skippedCount = 0;
-        List<StockItemDto> items = new ArrayList<>();
-        if (itemList.isArray()) {
+        int invalidSkippedCount = 0;  // resResultCode=0 또는 itemCode 없음 — 응답 신뢰 불가 신호
+        int zeroHoldingCount = 0;     // 전량 매도로 판단된 0값 종목 수
+        List<StockItemDto> holdingItems = new ArrayList<>();
+        Set<String> holdingItemCodes = new HashSet<>();
+        boolean itemListValid = itemList.isArray();
+
+        if (itemListValid) {
             for (JsonNode item : itemList) {
-                // 종목 조회 실패 건 skip
+                // 종목 조회 실패 건 — 응답 신뢰 불가
                 if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
                     log.debug("[CODEF] resResultCode=0 skip itemName={}", firstNonEmpty(item, "resItemName"));
-                    skippedCount++;
+                    invalidSkippedCount++;
                     continue;
                 }
 
@@ -260,28 +286,39 @@ public class CodefSyncService {
                     purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
                     valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
                 }
-                totalAsset += valuationAmt;
 
+                // itemCode 없으면 UNIQUE 제약 키 없음 — 응답 신뢰 불가
                 String itemCode = firstNonEmpty(item, "resItemCode");
                 if (itemCode.isBlank()) {
                     log.debug("[CODEF] itemCode 없음 skip itemName={}", firstNonEmpty(item, "resItemName"));
-                    skippedCount++;
+                    invalidSkippedCount++;
                     continue;
                 }
+
+                // 전량 매도 종목: 수량·매입금액·평가금액 모두 0 — 보유 목록에서 제외
+                int quantity = (int) parseLongField(item, "resQuantity");
+                if (quantity <= 0 && purchaseAmt == 0 && valuationAmt == 0) {
+                    log.debug("[CODEF] 전량 매도 종목 제외 org={} itemCode={}", organizationCode, itemCode);
+                    zeroHoldingCount++;
+                    continue;
+                }
+
+                totalAsset += valuationAmt;
 
                 String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
                 BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
 
-                items.add(new StockItemDto(
+                holdingItems.add(new StockItemDto(
                         firstNonEmpty(item, "resProductType"),
                         firstNonEmpty(item, "resItemName"),
                         itemCode,
-                        (int) parseLongField(item, "resQuantity"),
+                        quantity,
                         purchaseAmt,
                         valuationAmt,
                         valuationPL,
                         earningsRate
                 ));
+                holdingItemCodes.add(itemCode);
             }
         }
 
@@ -289,12 +326,25 @@ public class CodefSyncService {
         String accountNo = data.path("resAccount").asText("").trim();
 
         StockAssetDto assetDto = new StockAssetDto(organizationCode, accountNo, totalAsset, depositReceived);
-        assetService.syncAssetData(userId, assetDto, items);
+        AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
 
-        log.info("[CODEF] 증권 자산 저장 완료 org={} 종목={}건 skip={}건", organizationCode, items.size(), skippedCount);
+        if (itemListValid && invalidSkippedCount == 0) {
+            // 신뢰 가능한 완전한 응답 — reconcile 삭제 후 upsert
+            assetService.reconcileAndUpsertItems(assetAccount, holdingItems, holdingItemCodes);
+        } else if (!holdingItems.isEmpty()) {
+            // 응답 불완전 — 삭제 없이 upsert만
+            log.warn("[CODEF] 응답 불완전으로 reconcile 스킵 org={} invalidSkip={} itemListValid={}",
+                    organizationCode, invalidSkippedCount, itemListValid);
+            assetService.saveOrUpdateItems(assetAccount, holdingItems);
+        }
+
+        assetService.updateInvestableAmount(userId);
+
+        log.info("[CODEF] 증권 자산 저장 완료 org={} 보유={}건 매도제외={}건 invalidSkip={}건",
+                organizationCode, holdingItems.size(), zeroHoldingCount, invalidSkippedCount);
         return CodefSyncResultDto.builder()
-                .savedCount(items.size())
-                .skippedCount(skippedCount)
+                .savedCount(holdingItems.size())
+                .skippedCount(invalidSkippedCount + zeroHoldingCount)
                 .failedAccounts(List.of())
                 .syncedAt(LocalDateTime.now())
                 .build();
@@ -311,6 +361,12 @@ public class CodefSyncService {
             if ("CF-12201".equals(resultCode)) {
                 log.warn("[CF-12201] 중복 로그인 세션 — userId={} org={} connectedId={}",
                         userId, organizationCode, MaskingUtil.maskConnectedId(connectedId));
+            }
+            if (CodefErrorClassifier.classify(resultCode) == CodefErrorType.EMPTY_RESULT) {
+                log.info("[CODEF] 카드 조회 결과 없음 code={} org={}", resultCode, organizationCode);
+                return CodefSyncResultDto.builder()
+                        .savedCount(0).skippedCount(0).failedAccounts(List.of())
+                        .syncedAt(LocalDateTime.now()).build();
             }
             throw new CodefApiException(resultCode, message);
         }
@@ -375,9 +431,18 @@ public class CodefSyncService {
             }
             case RATE_LIMIT_ERROR -> log.warn("[CodefError] 요청 한도 초과 — 건너뜀 connectionId={}", conn.getId());
             case INSTITUTION_UNAVAILABLE -> {
-                log.warn("[CodefError] 금융기관 조회 불가 — 연동 유지, 재시도 없음 code={} connectionId={}", errorCode, conn.getId());
+                log.warn("[CodefError] 금융기관 조회 불가(점검/변경) — 연동 유지, 재시도 없음 code={} connectionId={}", errorCode, conn.getId());
                 throw new CodefInstitutionUnavailableException(errorCode);
             }
+            case COOLDOWN -> {
+                log.warn("[CodefError] 쿨다운 — 즉시 재시도 금지, 연동 유지 code={} connectionId={}", errorCode, conn.getId());
+                throw new CodefCooldownException(errorCode);
+            }
+            case CARD_UNAVAILABLE -> {
+                log.warn("[CodefError] 카드 해지/정지 — 해당 카드 스킵, 연동 유지 code={} connectionId={}", errorCode, conn.getId());
+                throw new CodefCardUnavailableException(errorCode);
+            }
+            case EMPTY_RESULT -> log.info("[CodefError] 조회 결과 없음 — 빈 결과 반환 code={} connectionId={}", errorCode, conn.getId());
             case PERMANENT_ERROR, UNKNOWN -> {
                 log.error("[CodefError] 영구/미분류 오류 — 연동 비활성화 connectionId={}", conn.getId());
                 deactivateById(conn.getId());
@@ -454,7 +519,6 @@ public class CodefSyncService {
                     params.put("cardPassword", codefApiClient.encryptRSA(cardPw));
                 }
 
-                boolean monthProcessed = false;
                 for (int attempt = 1; attempt <= 3; attempt++) {
                     try {
                         String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
@@ -481,7 +545,11 @@ public class CodefSyncService {
                                 log.warn("[CODEF Sync] resChargeHistoryList 없음 org={} startDate={}", org, startDate);
                             }
                         }
-                        monthProcessed = true;
+                        break;
+                    } catch (CodefInstitutionUnavailableException e) {
+                        log.warn("[CODEF Sync] 금융기관 조회 불가 월 스킵 org={} startDate={} code={}",
+                                org, startDate, e.getCodefCode());
+                        totalSkipped++;
                         break;
                     } catch (CodefRetryableException e) {
                         if (attempt < 3) {
@@ -537,21 +605,25 @@ public class CodefSyncService {
 
             String organization = account.getOrganizationCode();
             long totalAsset = 0L;
-            int skippedItems = 0;
-            List<StockItemDto> items = new ArrayList<>();
-            if (itemList.isArray()) {
+            int invalidSkippedItems = 0;  // resResultCode=0 또는 itemCode 없음 — 응답 신뢰 불가 신호
+            int zeroHoldingCount = 0;     // 전량 매도로 판단된 0값 종목 수
+            List<StockItemDto> holdingItems = new ArrayList<>();
+            Set<String> holdingItemCodes = new HashSet<>();
+            boolean itemListValid = itemList.isArray();
+
+            if (itemListValid) {
                 for (JsonNode item : itemList) {
-                    // 종목 조회 실패 건 skip
+                    // 종목 조회 실패 건 — 응답 신뢰 불가
                     if ("0".equals(firstNonEmpty(item, "resResultCode"))) {
                         log.debug("[CODEF Sync] resResultCode=0 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
-                        skippedItems++;
+                        invalidSkippedItems++;
                         continue;
                     }
-                    // itemCode 없으면 UNIQUE 제약 키 없음 — skip
+                    // itemCode 없으면 UNIQUE 제약 키 없음 — 응답 신뢰 불가
                     String itemCode = firstNonEmpty(item, "resItemCode");
                     if (itemCode.isBlank()) {
                         log.debug("[CODEF Sync] itemCode 없음 skip org={} itemName={}", organization, firstNonEmpty(item, "resItemName"));
-                        skippedItems++;
+                        invalidSkippedItems++;
                         continue;
                     }
 
@@ -571,21 +643,31 @@ public class CodefSyncService {
                         purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
                         valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
                     }
+
+                    // 전량 매도 종목: 수량·매입금액·평가금액 모두 0 — 보유 목록에서 제외
+                    int quantity = (int) parseLongField(item, "resQuantity");
+                    if (quantity <= 0 && purchaseAmt == 0 && valuationAmt == 0) {
+                        log.debug("[CODEF Sync] 전량 매도 종목 제외 org={} itemCode={}", organization, itemCode);
+                        zeroHoldingCount++;
+                        continue;
+                    }
+
                     totalAsset += valuationAmt;
 
                     String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
                     BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
 
-                    items.add(new StockItemDto(
+                    holdingItems.add(new StockItemDto(
                             firstNonEmpty(item, "resProductType"),
                             firstNonEmpty(item, "resItemName"),
                             itemCode,
-                            (int) parseLongField(item, "resQuantity"),
+                            quantity,
                             purchaseAmt,
                             valuationAmt,
                             valuationPL,
                             earningsRate
                     ));
+                    holdingItemCodes.add(itemCode);
                 }
             }
 
@@ -593,11 +675,19 @@ public class CodefSyncService {
             StockAssetDto assetDto = new StockAssetDto(
                     organization, account.getAccountNumber(), totalAsset, depositReceived);
             AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
-            if (!items.isEmpty()) {
-                assetService.saveOrUpdateItems(assetAccount, items);
+
+            if (itemListValid && invalidSkippedItems == 0) {
+                // 신뢰 가능한 완전한 응답 — reconcile 삭제 후 upsert
+                assetService.reconcileAndUpsertItems(assetAccount, holdingItems, holdingItemCodes);
+            } else if (!holdingItems.isEmpty()) {
+                // 응답 불완전(itemList 비정상 또는 조회 실패 종목 존재) — 삭제 없이 upsert만
+                log.warn("[CODEF Sync] 응답 불완전으로 reconcile 스킵 org={} invalidSkip={} itemListValid={}",
+                        organization, invalidSkippedItems, itemListValid);
+                assetService.saveOrUpdateItems(assetAccount, holdingItems);
             }
 
-            log.info("[CODEF Sync] 증권 upsert 완료 org={} 종목={}건 skip={}건", account.getOrganizationCode(), items.size(), skippedItems);
+            log.info("[CODEF Sync] 증권 동기화 완료 org={} 보유={}건 매도제외={}건 invalidSkip={}건",
+                    account.getOrganizationCode(), holdingItems.size(), zeroHoldingCount, invalidSkippedItems);
             return 1;
         } finally {
             stringRedisTemplate.delete(lockKey);

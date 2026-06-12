@@ -438,6 +438,9 @@ INSERT IGNORE INTO merchant_category_rule (keyword, category_id, match_type, pri
 ('이케아',          6, 'CONTAINS', 100),
 ('현대리바트',      6, 'CONTAINS', 100),
 
+('클라피',      6, 'CONTAINS', 85), -- 프린트 회사
+
+
 
 
 -- ============================================================

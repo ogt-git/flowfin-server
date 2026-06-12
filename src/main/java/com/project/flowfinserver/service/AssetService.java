@@ -70,6 +70,11 @@ public class AssetService {
                 });
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Optional<AssetAccount> findAccount(Long userId, String brokerCode) {
+        return assetAccountRepository.findByUserIdAndBrokerCode(userId, brokerCode);
+    }
+
     /**
      * 각 종목을 upsert. (account_id, item_code) UNIQUE — 있으면 업데이트, 없으면 저장.
      */

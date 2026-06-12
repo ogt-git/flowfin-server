@@ -322,20 +322,22 @@ public class CodefSyncService {
             }
         }
 
-        long depositReceived = parseLongField(data, "resDepositReceived");
-        String accountNo = data.path("resAccount").asText("").trim();
+        boolean responseComplete = itemListValid && invalidSkippedCount == 0;
 
-        StockAssetDto assetDto = new StockAssetDto(organizationCode, accountNo, totalAsset, depositReceived);
-        AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
-
-        if (itemListValid && invalidSkippedCount == 0) {
-            // 신뢰 가능한 완전한 응답 — reconcile 삭제 후 upsert
+        if (responseComplete) {
+            long depositReceived = parseLongField(data, "resDepositReceived");
+            String accountNo = data.path("resAccount").asText("").trim();
+            StockAssetDto assetDto = new StockAssetDto(organizationCode, accountNo, totalAsset, depositReceived);
+            AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
             assetService.reconcileAndUpsertItems(assetAccount, holdingItems, holdingItemCodes);
         } else if (!holdingItems.isEmpty()) {
-            // 응답 불완전 — 삭제 없이 upsert만
-            log.warn("[CODEF] 응답 불완전으로 reconcile 스킵 org={} invalidSkip={} itemListValid={}",
+            log.warn("[CODEF] 응답 불완전으로 계좌 금액 업데이트·reconcile 스킵 — 정상 종목만 upsert org={} invalidSkip={} itemListValid={}",
                     organizationCode, invalidSkippedCount, itemListValid);
-            assetService.saveOrUpdateItems(assetAccount, holdingItems);
+            assetService.findAccount(userId, organizationCode)
+                    .ifPresent(existing -> assetService.saveOrUpdateItems(existing, holdingItems));
+        } else {
+            log.warn("[CODEF] 응답 불완전으로 자산 데이터 변경 없음 org={} invalidSkip={} itemListValid={}",
+                    organizationCode, invalidSkippedCount, itemListValid);
         }
 
         assetService.updateInvestableAmount(userId);
@@ -671,19 +673,22 @@ public class CodefSyncService {
                 }
             }
 
-            long depositReceived = parseLongField(data, "resDepositReceived");
-            StockAssetDto assetDto = new StockAssetDto(
-                    organization, account.getAccountNumber(), totalAsset, depositReceived);
-            AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
+            boolean responseComplete = itemListValid && invalidSkippedItems == 0;
 
-            if (itemListValid && invalidSkippedItems == 0) {
-                // 신뢰 가능한 완전한 응답 — reconcile 삭제 후 upsert
+            if (responseComplete) {
+                long depositReceived = parseLongField(data, "resDepositReceived");
+                StockAssetDto assetDto = new StockAssetDto(
+                        organization, account.getAccountNumber(), totalAsset, depositReceived);
+                AssetAccount assetAccount = assetService.saveOrUpdateAccount(userId, assetDto);
                 assetService.reconcileAndUpsertItems(assetAccount, holdingItems, holdingItemCodes);
             } else if (!holdingItems.isEmpty()) {
-                // 응답 불완전(itemList 비정상 또는 조회 실패 종목 존재) — 삭제 없이 upsert만
-                log.warn("[CODEF Sync] 응답 불완전으로 reconcile 스킵 org={} invalidSkip={} itemListValid={}",
+                log.warn("[CODEF Sync] 응답 불완전으로 계좌 금액 업데이트·reconcile 스킵 — 정상 종목만 upsert org={} invalidSkip={} itemListValid={}",
                         organization, invalidSkippedItems, itemListValid);
-                assetService.saveOrUpdateItems(assetAccount, holdingItems);
+                assetService.findAccount(userId, organization)
+                        .ifPresent(existing -> assetService.saveOrUpdateItems(existing, holdingItems));
+            } else {
+                log.warn("[CODEF Sync] 응답 불완전으로 자산 데이터 변경 없음 org={} invalidSkip={} itemListValid={}",
+                        organization, invalidSkippedItems, itemListValid);
             }
 
             log.info("[CODEF Sync] 증권 동기화 완료 org={} 보유={}건 매도제외={}건 invalidSkip={}건",

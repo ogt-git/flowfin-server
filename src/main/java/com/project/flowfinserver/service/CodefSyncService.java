@@ -450,6 +450,18 @@ public class CodefSyncService {
                 throw new CodefCardUnavailableException(errorCode);
             }
             case EMPTY_RESULT -> log.info("[CodefError] 조회 결과 없음 — 빈 결과 반환 code={} connectionId={}", errorCode, conn.getId());
+            case UNSUPPORTED_OPERATION -> {
+                log.warn("[CodefError] 상품/로그인 방식 미지원 — 연동 비활성화 connectionId={}", conn.getId());
+                deactivateById(conn.getId());
+                throw new CodefUnsupportedOperationException(
+                        "해당 증권사는 현재 로그인 방식으로 자산 조회를 지원하지 않습니다. 인증서 방식으로 재연동해 주세요.",
+                        errorCode);
+            }
+            case OPERATION_PERMISSION_DENIED -> {
+                log.warn("[CodefError] 메뉴 조회 권한 없음 — 연동 비활성화 connectionId={}", conn.getId());
+                deactivateById(conn.getId());
+                throw new CodefApiException(errorCode, message);
+            }
             case PERMANENT_ERROR, UNKNOWN -> {
                 log.error("[CodefError] 영구/미분류 오류 — 연동 비활성화 connectionId={}", conn.getId());
                 deactivateById(conn.getId());

@@ -19,6 +19,10 @@ public enum CodefErrorType {
     CARD_UNAVAILABLE,
     /** 조회 결과 없음 — 빈 결과 정상 반환 (에러 아님) */
     EMPTY_RESULT,
+    /** 상품/로그인 방식 조합 미지원 — 재시도 없이 연동 비활성화, 사용자에게 재연동 안내 */
+    UNSUPPORTED_OPERATION,
+    /** 메뉴 조회 권한 없음 — 계정 권한/설정 문제, 재시도 없이 연동 비활성화 */
+    OPERATION_PERMISSION_DENIED,
     /** 미분류 오류 — 연동 비활성화 */
     UNKNOWN
 }

@@ -20,7 +20,6 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true
           script: |
             set -e
 
@@ -60,7 +59,7 @@ jobs:
             JAVA_TOOL_OPTIONS=-Xmx512m
             EOF
 
-            sudo install -m 600 -o root -g root /tmp/flowfin-prod.env /etc/flowfin/prod.env
+            sudo install -m 640 -o root -g docker /tmp/flowfin-prod.env /etc/flowfin/prod.env
             rm -f /tmp/flowfin-prod.env
 
             echo "2. Update source code"

@@ -109,6 +109,13 @@ public class CodefService {
             accountMap.put("birthDate", request.getBirthDate());
         }
 
+        if ("CD".equals(businessType) && hasValue(request.getAccountNumber())) {
+            accountMap.put("cardNo", request.getAccountNumber());
+        }
+        if ("CD".equals(businessType) && hasValue(request.getAccountPassword())) {
+            accountMap.put("cardPassword", codefApiClient.encryptRSA(request.getAccountPassword()));
+        }
+
         List<HashMap<String, Object>> accountList = new ArrayList<>();
         accountList.add(accountMap);
 
@@ -151,6 +158,19 @@ public class CodefService {
 
                 if (alreadyActive) {
                     log.info("[Connect] already active for org={} type={}", organization, accountType);
+                    if (hasValue(request.getAccountNumber()) || hasValue(request.getAccountPassword())) {
+                        Optional<CodefConnectedAccount> existingOpt = (loginIdHash != null)
+                                ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
+                                        userId, organization, accountType, loginIdHash)
+                                : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
+                                        userId, organization, accountType);
+                        existingOpt.ifPresent(existing -> {
+                            if (hasValue(request.getAccountNumber()))   existing.updateAccountNumber(request.getAccountNumber());
+                            if (hasValue(request.getAccountPassword())) existing.updateAccountPassword(request.getAccountPassword());
+                            connectedAccountRepository.save(existing);
+                            log.info("[Connect] 기존 활성 연동 accountNumber/Password 업데이트 org={}", organization);
+                        });
+                    }
                     continue;
                 }
 

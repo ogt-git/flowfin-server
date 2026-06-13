@@ -25,6 +25,14 @@ public interface CodefConnectedAccountRepository extends JpaRepository<CodefConn
     boolean existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
             Long userId, String organizationCode, AccountType accountType);
 
+    // ID/PW 방식 — 활성 레코드 조회 (accountNumber 업데이트용)
+    Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
+            Long userId, String organizationCode, AccountType accountType, String loginIdHash);
+
+    // 인증서 방식 — 활성 레코드 조회 (accountNumber 업데이트용)
+    Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
+            Long userId, String organizationCode, AccountType accountType);
+
     // ID/PW 방식 — 비활성 레코드 조회 (재활성화용)
     Optional<CodefConnectedAccount> findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveFalse(
             Long userId, String organizationCode, AccountType accountType, String loginIdHash);

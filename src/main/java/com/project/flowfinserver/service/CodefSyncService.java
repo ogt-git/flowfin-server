@@ -438,7 +438,7 @@ public class CodefSyncService {
             }
             case RATE_LIMIT_ERROR -> log.warn("[CodefError] 요청 한도 초과 — 건너뜀 connectionId={}", conn.getId());
             case INSTITUTION_UNAVAILABLE -> {
-                log.warn("[CodefError] 금융기관 조회 불가(점검/변경) — 연동 유지, 재시도 없음 code={} connectionId={}", errorCode, conn.getId());
+                log.warn("[CodefError] 금융기관 조회 불가(점검/변경) — 연동 유지, 호출부에서 1회 재시도 후 cycle 스킵 code={} connectionId={}", errorCode, conn.getId());
                 throw new CodefInstitutionUnavailableException(errorCode);
             }
             case COOLDOWN -> {
@@ -526,6 +526,7 @@ public class CodefSyncService {
                     params.put("cardPassword", codefApiClient.encryptRSA(cardPw));
                 }
 
+                boolean institutionRetried = false;
                 for (int attempt = 1; attempt <= 3; attempt++) {
                     try {
                         String response = codefApiClient.requestProduct(CARD_PRODUCT_URL, params);
@@ -554,10 +555,16 @@ public class CodefSyncService {
                         }
                         break;
                     } catch (CodefInstitutionUnavailableException e) {
-                        log.warn("[CODEF Sync] 금융기관 조회 불가 월 스킵 org={} startDate={} code={}",
-                                org, startDate, e.getCodefCode());
-                        totalSkipped++;
-                        break;
+                        if (!institutionRetried) {
+                            institutionRetried = true;
+                            log.warn("[CODEF Sync] 금융기관 조회 불가, 1회 재시도 org={} startDate={} code={}",
+                                    org, startDate, e.getCodefCode());
+                            // attempt 루프 계속 → 1회 재시도
+                        } else {
+                            log.warn("[CODEF Sync] 금융기관 재시도 실패 — 남은 월 전체 스킵 org={} startDate={} code={}",
+                                    org, startDate, e.getCodefCode());
+                            throw e; // while 루프 탈출, CodefBatchService로 전파
+                        }
                     } catch (CodefRetryableException e) {
                         if (attempt < 3) {
                             log.warn("[CODEF Sync] 일시적 오류 재시도 {}/3 org={} startDate={} code={}",
@@ -597,14 +604,28 @@ public class CodefSyncService {
                 params.put("accountPassword", codefApiClient.encryptRSA(account.getAccountPassword()));
             }
 
-            String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
-            JsonNode root = objectMapper.readTree(response);
-
-            String resultCode = root.path("result").path("code").asText();
-            if (!CODEF_SUCCESS.equals(resultCode)) {
-                String message = root.path("result").path("message").asText();
-                handleCodefError(resultCode, message, account);
-                return 0;
+            JsonNode root = null;
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    String response = codefApiClient.requestProduct(STOCK_PRODUCT_URL, params);
+                    root = objectMapper.readTree(response);
+                    String resultCode = root.path("result").path("code").asText();
+                    if (!CODEF_SUCCESS.equals(resultCode)) {
+                        String message = root.path("result").path("message").asText();
+                        handleCodefError(resultCode, message, account);
+                        return 0;
+                    }
+                    break; // 성공
+                } catch (CodefInstitutionUnavailableException e) {
+                    if (attempt < 2) {
+                        log.warn("[CODEF Sync] 금융기관 조회 불가, 1회 재시도 org={} code={}",
+                                account.getOrganizationCode(), e.getCodefCode());
+                    } else {
+                        log.warn("[CODEF Sync] 금융기관 재시도 실패 — 이번 sync cycle 스킵 org={} code={}",
+                                account.getOrganizationCode(), e.getCodefCode());
+                        throw e; // CodefBatchService로 전파
+                    }
+                }
             }
 
             JsonNode data = root.path("data");

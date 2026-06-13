@@ -467,6 +467,17 @@ public class CodefSyncService {
         accountMap.put("clientType", "ST".equals(businessType) ? "A" : "P");
         accountMap.put("organization", conn.getOrganizationCode());
 
+        if ("CD".equals(businessType)) {
+            String cardNo = conn.getAccountNumber();
+            String cardPw = conn.getAccountPassword();
+            if (cardNo != null && !cardNo.isBlank()) {
+                accountMap.put("cardNo", cardNo);
+            }
+            if (cardPw != null && !cardPw.isBlank()) {
+                accountMap.put("cardPassword", codefApiClient.encryptRSA(cardPw));
+            }
+        }
+
         ArrayList<HashMap<String, Object>> accountList = new ArrayList<>();
         accountList.add(accountMap);
 

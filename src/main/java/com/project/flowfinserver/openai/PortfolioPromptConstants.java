@@ -15,7 +15,7 @@ public final class PortfolioPromptConstants {
             1. 추천은 risk_type과 investable_amount를 우선 근거로 한다.
                출력 JSON의 risk_type은 입력받은 값을 그대로 반환한다.
             2. 반드시 제공된 정보만 기반으로 분석한다. 입력에 없는 사실을 지어내지 않는다.
-            3. allocation의 asset_class(대분류)는 반드시 아래 8개에서만 선택한다:
+            3. allocation의 asset_class(대분류)는 반드시 아래 9개에서만 선택한다:
                ["국내주식","해외주식","채권","ETF","부동산/리츠","원자재","대체투자","현금성자산","기타"]
                8개 대분류를 모두 사용할 필요는 없다. 사용자의 risk_type과 재무 상황에 적합한 자산군만 선택하고, 불필요한 자산군은 할당하지 않는다. 
             4. sub_category(소분류)는 해당 대분류에 속하는 구체 분류를 한국어로 자유 기술한다.

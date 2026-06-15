@@ -11,6 +11,7 @@ import com.project.flowfinserver.dto.codef.CodefConnectRequest;
 import com.project.flowfinserver.dto.codef.CodefStockRequest;
 import com.project.flowfinserver.exception.CodefAccountNotFoundException;
 import com.project.flowfinserver.exception.CodefApiException;
+import com.project.flowfinserver.exception.CodefUnsupportedOperationException;
 import com.project.flowfinserver.repository.AssetAccountRepository;
 import com.project.flowfinserver.repository.AssetItemRepository;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
@@ -29,10 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -41,6 +39,22 @@ public class CodefService {
 
     private static final DateTimeFormatter BILLING_DATE_FMT =
             DateTimeFormatter.ofPattern("yyyyMM");
+
+    // ID/PW 방식(loginType=1)으로 증권 자산 조회를 지원하지 않는 증권사 기관 코드
+    private static final Set<String> STOCK_IDPW_UNSUPPORTED_ORGS = Set.of(
+            "0225",  // IBK투자증권
+            "0243",  // 한국투자증권
+            "0262",  // 하이투자증권
+            "0264",  // 키움증권
+            "0270",  // 하나증권
+            "0279",  // DB금융투자
+            "0287"   // 메리츠증권
+    );
+
+    // 인증서 방식(loginType=0)으로 증권 자산 조회를 지원하지 않는 증권사 기관 코드
+    private static final Set<String> STOCK_CERT_UNSUPPORTED_ORGS = Set.of(
+            "0227"   // 다올투자증권
+    );
 
     private final CodefApiClient codefApiClient;
     private final CodefConnectedAccountRepository connectedAccountRepository;
@@ -76,6 +90,20 @@ public class CodefService {
             throw new IllegalArgumentException("password는 필수입니다.");
         }
 
+        // 증권 + 미지원 로그인 방식 조합 사전 차단 — CODEF createAccount 호출 전 거절
+        if ("ST".equals(businessType)) {
+            if ("1".equals(loginType) && STOCK_IDPW_UNSUPPORTED_ORGS.contains(request.getOrganization())) {
+                throw new CodefUnsupportedOperationException(
+                        "해당 증권사는 ID/PW 방식으로 자산 조회를 지원하지 않습니다. 인증서 방식으로 연동해 주세요.",
+                        "STOCK_IDPW_UNSUPPORTED");
+            }
+            if ("0".equals(loginType) && STOCK_CERT_UNSUPPORTED_ORGS.contains(request.getOrganization())) {
+                throw new CodefUnsupportedOperationException(
+                        "해당 증권사는 인증서 방식으로 자산 조회를 지원하지 않습니다.",
+                        "STOCK_CERT_UNSUPPORTED");
+            }
+        }
+
         log.info("[Connect] userId={} organization={} businessType={} loginType={}",
                 userId, request.getOrganization(), businessType, loginType);
 
@@ -107,6 +135,13 @@ public class CodefService {
 
         if (hasValue(request.getBirthDate())) {
             accountMap.put("birthDate", request.getBirthDate());
+        }
+
+        if ("CD".equals(businessType) && hasValue(request.getAccountNumber())) {
+            accountMap.put("cardNo", request.getAccountNumber());
+        }
+        if ("CD".equals(businessType) && hasValue(request.getAccountPassword())) {
+            accountMap.put("cardPassword", codefApiClient.encryptRSA(request.getAccountPassword()));
         }
 
         List<HashMap<String, Object>> accountList = new ArrayList<>();
@@ -145,21 +180,34 @@ public class CodefService {
                 // 이미 활성화된 연동이 있으면 skip
                 boolean alreadyActive = (loginIdHash != null)
                         ? connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
-                                userId, organization, accountType, loginIdHash)
+                        userId, organization, accountType, loginIdHash)
                         : connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
-                                userId, organization, accountType);
+                        userId, organization, accountType);
 
                 if (alreadyActive) {
                     log.info("[Connect] already active for org={} type={}", organization, accountType);
+                    if (hasValue(request.getAccountNumber()) || hasValue(request.getAccountPassword())) {
+                        Optional<CodefConnectedAccount> existingOpt = (loginIdHash != null)
+                                ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
+                                userId, organization, accountType, loginIdHash)
+                                : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
+                                userId, organization, accountType);
+                        existingOpt.ifPresent(existing -> {
+                            if (hasValue(request.getAccountNumber()))   existing.updateAccountNumber(request.getAccountNumber());
+                            if (hasValue(request.getAccountPassword())) existing.updateAccountPassword(request.getAccountPassword());
+                            connectedAccountRepository.save(existing);
+                            log.info("[Connect] 기존 활성 연동 accountNumber/Password 업데이트 org={}", organization);
+                        });
+                    }
                     continue;
                 }
 
                 // 해제(inactive) 상태 레코드가 있으면 재활성화, 없으면 새로 생성
                 CodefConnectedAccount conn = ((loginIdHash != null)
                         ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveFalse(
-                                userId, organization, accountType, loginIdHash)
+                        userId, organization, accountType, loginIdHash)
                         : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveFalse(
-                                userId, organization, accountType))
+                        userId, organization, accountType))
                         .orElseGet(() -> CodefConnectedAccount.create(
                                 userId, connectedId, organization, accountType, loginId, loginIdHash));
 

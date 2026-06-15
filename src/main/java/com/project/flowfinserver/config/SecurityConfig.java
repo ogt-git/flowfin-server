@@ -68,6 +68,8 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/health").permitAll();
 
+                    auth.requestMatchers(HttpMethod.POST, "/api/codef/card", "/api/codef/stock").denyAll();
+
                     if (Arrays.asList(environment.getActiveProfiles()).contains("prod")) {
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").denyAll();
                     } else {

@@ -137,6 +137,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage(), e.getCodefCode()));
     }
 
+    // 상품/로그인 방식 조합 미지원 (CF-12030, CF-12040, CF-12050, 사전 차단 포함) — 422 Unprocessable Entity
+    @ExceptionHandler(CodefUnsupportedOperationException.class)
+    public ResponseEntity<ApiResponse<?>> handleCodefUnsupportedOperation(CodefUnsupportedOperationException e) {
+        log.warn("[CodefUnsupportedOperation] code={} message={}", e.getCodefCode(), e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiResponse.error(e.getMessage(), ErrorCode.CODEF_UNSUPPORTED_OPERATION.name()));
+    }
+
     // 금융기관 사이트 변경/점검으로 조회 불가 (CF-12701, CF-12710) — 503 Service Unavailable
     @ExceptionHandler(CodefInstitutionUnavailableException.class)
     public ResponseEntity<ApiResponse<?>> handleCodefInstitutionUnavailable(CodefInstitutionUnavailableException e) {

@@ -33,8 +33,20 @@ public final class CodefErrorClassifier {
     );
 
     private static final Set<String> INSTITUTION_UNAVAILABLE_CODES = Set.of(
-            "CF-12701", "CF-12710", "CF-12040",
-            "CF-12041"  // 증권사 시스템 점검 시간 (새벽 배치 충돌 가능)
+            "CF-12701", "CF-12710",
+            "CF-12041"  // 증권사 시스템 점검 시간 (새벽 배치 충돌 가능) — CODEF 정의 재확인 전 유지
+    );
+
+    // 상품/엔진/로그인 방식 조합 미지원 — 재시도해도 해결 불가, 사전 차단이 불가능한 케이스 방어
+    private static final Set<String> UNSUPPORTED_OPERATION_CODES = Set.of(
+            "CF-12030",  // 현재 엔진 버전에서 미지원
+            "CF-12040",  // 현재 모듈 미지원
+            "CF-12050"   // 대상기관에서 제공하지 않는 업무
+    );
+
+    // 메뉴 조회 권한 없음 — 로그인 방식 문제가 아닌 계정 권한/설정 문제
+    private static final Set<String> OPERATION_PERMISSION_DENIED_CODES = Set.of(
+            "CF-12049"
     );
 
     private static final Set<String> RATE_LIMIT_CODES = Set.of(
@@ -67,8 +79,10 @@ public final class CodefErrorClassifier {
         if (COOLDOWN_CODES.contains(errorCode))                  return CodefErrorType.COOLDOWN;
         if (TRANSIENT_ERROR_CODES.contains(errorCode))           return CodefErrorType.TRANSIENT_ERROR;
         if (RATE_LIMIT_CODES.contains(errorCode))                return CodefErrorType.RATE_LIMIT_ERROR;
-        if (PERMANENT_ERROR_CODES.contains(errorCode))           return CodefErrorType.PERMANENT_ERROR;
-        if (INSTITUTION_UNAVAILABLE_CODES.contains(errorCode))   return CodefErrorType.INSTITUTION_UNAVAILABLE;
+        if (PERMANENT_ERROR_CODES.contains(errorCode))            return CodefErrorType.PERMANENT_ERROR;
+        if (INSTITUTION_UNAVAILABLE_CODES.contains(errorCode))    return CodefErrorType.INSTITUTION_UNAVAILABLE;
+        if (UNSUPPORTED_OPERATION_CODES.contains(errorCode))      return CodefErrorType.UNSUPPORTED_OPERATION;
+        if (OPERATION_PERMISSION_DENIED_CODES.contains(errorCode)) return CodefErrorType.OPERATION_PERMISSION_DENIED;
         return CodefErrorType.UNKNOWN;
     }
 }

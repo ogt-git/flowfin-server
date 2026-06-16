@@ -840,9 +840,14 @@ public class CodefSyncService {
 
     private StockAmounts correctMissingStockAmounts(long valuationAmt, long purchaseAmt,
                                                     long valuationPL, BigDecimal earningsRate) {
-        if (valuationAmt <= 0 || earningsRate.compareTo(BigDecimal.ZERO) == 0
-                || (purchaseAmt != 0 && valuationPL != 0)) {
+        if (valuationAmt <= 0 || (purchaseAmt != 0 && valuationPL != 0)) {
             return new StockAmounts(purchaseAmt, valuationPL);
+        }
+
+        // 수익률 0% → 매입금액 = 평가금액, 평가손익 = 0
+        if (earningsRate.compareTo(BigDecimal.ZERO) == 0) {
+            long correctedPurchaseAmount = purchaseAmt == 0 ? valuationAmt : purchaseAmt;
+            return new StockAmounts(correctedPurchaseAmount, 0L);
         }
 
         BigDecimal denominator = BigDecimal.ONE.add(

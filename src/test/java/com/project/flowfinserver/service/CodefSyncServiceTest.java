@@ -7,6 +7,7 @@ import com.project.flowfinserver.domain.CodefConnectedAccount;
 import com.project.flowfinserver.dto.ExpenseSaveResult;
 import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
+import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.exception.CodefAccountNotFoundException;
 import com.project.flowfinserver.exception.TooManyRequestsException;
 import com.project.flowfinserver.openai.AiExpenseClassifier;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -77,6 +79,56 @@ class CodefSyncServiceTest {
                   {
                     "resValuationAmt": "1100000", "resPurchaseAmount": "1000000",
                     "resValuationPL": "100000", "resItemName": "삼성전자", "resItemCode": "005930"
+                  }
+                ]
+              }
+            }
+            """;
+
+    private static final String STOCK_USD_MISSING_AMOUNTS_RESPONSE = """
+            {
+              "result": {"code": "CF-00000", "message": "success"},
+              "data": {
+                "resAccount": "12345678901",
+                "resDepositReceived": "500000",
+                "resItemList": [
+                  {
+                    "resProductType": "외화증권",
+                    "resItemName": "MARSH & MCLENNAN COMPANIES INC",
+                    "resItemCode": "MRSH",
+                    "resQuantity": "1",
+                    "resPresentAmt": "165.78",
+                    "resAvgPresentAmt": "161.04",
+                    "resPurchaseAmount": "",
+                    "resValuationAmt": "252053",
+                    "resValuationPL": "",
+                    "resEarningsRate": "3.56",
+                    "resAccountCurrency": "USD"
+                  }
+                ]
+              }
+            }
+            """;
+
+    private static final String STOCK_ZERO_EARNINGS_RATE_RESPONSE = """
+            {
+              "result": {"code": "CF-00000", "message": "success"},
+              "data": {
+                "resAccount": "12345678901",
+                "resDepositReceived": "500000",
+                "resItemList": [
+                  {
+                    "resProductType": "외화증권",
+                    "resItemName": "SOME STOCK",
+                    "resItemCode": "SOME",
+                    "resQuantity": "10",
+                    "resPresentAmt": "10000",
+                    "resAvgPresentAmt": "10000",
+                    "resPurchaseAmount": "",
+                    "resValuationAmt": "100000",
+                    "resValuationPL": "",
+                    "resEarningsRate": "0",
+                    "resAccountCurrency": "KRW"
                   }
                 ]
               }
@@ -221,6 +273,66 @@ class CodefSyncServiceTest {
         assertThat(result.getFailedAccounts()).isEmpty();
         then(assetService).should(times(1)).saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class));
         then(assetService).should(times(1)).reconcileAndUpsertItems(eq(mockAccount), anyList(), anySet());
+    }
+
+    @Test
+    @DisplayName("syncStock derives missing purchase amount and valuation P/L")
+    void syncStock_derivesMissingAmountsFromEarningsRate() throws Exception {
+        CodefConnectedAccount kbStockAccount = CodefConnectedAccount.create(
+                TEST_USER_ID, "kb-stock-connected-id", "0218", AccountType.STOCK, null, null);
+        kbStockAccount.updateAccountNumber("12345678901");
+
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), eq("1"), anyLong(), any(TimeUnit.class))).willReturn(true);
+        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
+                .willReturn(List.of(kbStockAccount));
+        given(codefApiClient.requestProduct(anyString(), any())).willReturn(STOCK_USD_MISSING_AMOUNTS_RESPONSE);
+
+        com.project.flowfinserver.domain.AssetAccount mockAccount =
+                com.project.flowfinserver.domain.AssetAccount.create(TEST_USER_ID, "0218", "12345678901", 252_053L, 500_000L);
+        given(assetService.saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class))).willReturn(mockAccount);
+
+        CodefSyncResultDto result = codefSyncService.syncStock(TEST_USER_ID);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<StockItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        then(assetService).should().reconcileAndUpsertItems(eq(mockAccount), itemsCaptor.capture(), anySet());
+
+        assertThat(result.getSavedCount()).isEqualTo(1);
+        assertThat(itemsCaptor.getValue()).hasSize(1);
+        StockItemDto item = itemsCaptor.getValue().get(0);
+        assertThat(item.purchaseAmount()).isEqualTo(243_388L);
+        assertThat(item.valuationAmt()).isEqualTo(252_053L);
+        assertThat(item.valuationPl()).isEqualTo(8_665L);
+    }
+
+    @Test
+    @DisplayName("수익률 0%일 때 매입금액이 없으면 평가금액으로 보정하고 평가손익은 0으로 설정한다")
+    void syncStock_zeroEarningsRate_setsPurchaseAmountToValuationAmt() throws Exception {
+        CodefConnectedAccount kbStockAccount = CodefConnectedAccount.create(
+                TEST_USER_ID, "kb-stock-connected-id", "0218", AccountType.STOCK, null, null);
+        kbStockAccount.updateAccountNumber("12345678901");
+
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), eq("1"), anyLong(), any(TimeUnit.class))).willReturn(true);
+        given(connectedAccountRepository.findByUserIdAndAccountTypeAndIsActiveTrue(TEST_USER_ID, AccountType.STOCK))
+                .willReturn(List.of(kbStockAccount));
+        given(codefApiClient.requestProduct(anyString(), any())).willReturn(STOCK_ZERO_EARNINGS_RATE_RESPONSE);
+
+        com.project.flowfinserver.domain.AssetAccount mockAccount =
+                com.project.flowfinserver.domain.AssetAccount.create(TEST_USER_ID, "0218", "12345678901", 100_000L, 500_000L);
+        given(assetService.saveOrUpdateAccount(eq(TEST_USER_ID), any(StockAssetDto.class))).willReturn(mockAccount);
+
+        codefSyncService.syncStock(TEST_USER_ID);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<StockItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        then(assetService).should().reconcileAndUpsertItems(eq(mockAccount), itemsCaptor.capture(), anySet());
+
+        StockItemDto item = itemsCaptor.getValue().get(0);
+        assertThat(item.purchaseAmount()).isEqualTo(100_000L);
+        assertThat(item.valuationAmt()).isEqualTo(100_000L);
+        assertThat(item.valuationPl()).isEqualTo(0L);
     }
 
     @Test

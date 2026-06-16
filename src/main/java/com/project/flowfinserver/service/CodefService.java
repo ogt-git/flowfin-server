@@ -10,7 +10,9 @@ import com.project.flowfinserver.dto.codef.CodefCardRequest;
 import com.project.flowfinserver.dto.codef.CodefConnectRequest;
 import com.project.flowfinserver.dto.codef.CodefStockRequest;
 import com.project.flowfinserver.exception.CodefAccountNotFoundException;
+import com.project.flowfinserver.exception.CodefAlreadyConnectedException;
 import com.project.flowfinserver.exception.CodefApiException;
+import com.project.flowfinserver.exception.CodefConnectInProgressException;
 import com.project.flowfinserver.exception.CodefUnsupportedOperationException;
 import com.project.flowfinserver.repository.AssetAccountRepository;
 import com.project.flowfinserver.repository.AssetItemRepository;
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -39,6 +43,8 @@ public class CodefService {
 
     private static final DateTimeFormatter BILLING_DATE_FMT =
             DateTimeFormatter.ofPattern("yyyyMM");
+    private static final String CONNECT_LOCK_PREFIX = "codef:connect:lock:";
+    private static final long CONNECT_LOCK_TTL_MINUTES = 5L;
 
     // ID/PW 방식(loginType=1)으로 증권 자산 조회를 지원하지 않는 증권사 기관 코드
     private static final Set<String> STOCK_IDPW_UNSUPPORTED_ORGS = Set.of(
@@ -66,6 +72,7 @@ public class CodefService {
     private final ExpenseStatsCacheManager expenseStatsCacheManager;
     private final AesEncryptionUtil aesEncryptionUtil;
     private final SyncStatusService syncStatusService;
+    private final StringRedisTemplate stringRedisTemplate;
 
     // self-injection: @Async는 Spring 프록시를 통해야 동작 — 동일 클래스 내 직접 호출 시 비동기 미적용 방지
     @Lazy
@@ -77,6 +84,7 @@ public class CodefService {
         String businessType = request.getBusinessType().toUpperCase();
         String loginType    = request.getLoginType();
 
+        // 1. 요청 검증
         if (!hasValue(request.getOrganization())) {
             throw new IllegalArgumentException("organization은 필수입니다.");
         }
@@ -104,130 +112,140 @@ public class CodefService {
             }
         }
 
-        log.info("[Connect] userId={} organization={} businessType={} loginType={}",
-                userId, request.getOrganization(), businessType, loginType);
+        // 2. accountType 계산
+        AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
 
-        String encryptedPw = codefApiClient.encryptRSA(request.getPassword());
+        // 3. loginType / loginIdHash / credentialKey 계산
+        //    credentialKey: ID/PW = sha256(loginId), 인증서 = "CERT" (락 키 구성에만 사용)
+        String loginId       = "1".equals(loginType) ? request.getId() : null;
+        String loginIdHash   = (loginId != null) ? aesEncryptionUtil.hash(loginId) : null;
+        String credentialKey = (loginId != null) ? loginIdHash : "CERT";
 
-        HashMap<String, Object> accountMap = new HashMap<>();
-        accountMap.put("countryCode", "KR");
-        accountMap.put("businessType", businessType);
-        accountMap.put("clientType", resolveClientType(businessType));
-        accountMap.put("organization", request.getOrganization());
-        accountMap.put("loginType", loginType);
-        accountMap.put("password", encryptedPw);
+        // 4. active 연동 선조회 — CODEF createAccount 호출 전 차단
+        if (isAlreadyActive(userId, request.getOrganization(), accountType, loginIdHash)) {
+            throw new CodefAlreadyConnectedException();
+        }
 
-        if ("0".equals(loginType)) {
-            // 인증서 방식 — derFile, keyFile 필수 / certType 하드코딩
-            if (!hasValue(request.getDerFileBase64()) || !hasValue(request.getKeyFileBase64())) {
-                throw new IllegalArgumentException("인증서 방식(loginType=0)은 derFile과 keyFile이 필수입니다.");
+        // 5. Redis connect lock 획득 (setIfAbsent = NX EX, UUID 소유권 토큰)
+        String lockKey   = buildConnectLockKey(userId, accountType, request.getOrganization(), loginType, credentialKey);
+        String lockToken = UUID.randomUUID().toString();
+        Boolean locked   = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, lockToken, CONNECT_LOCK_TTL_MINUTES, TimeUnit.MINUTES);
+        if (!Boolean.TRUE.equals(locked)) {
+            throw new CodefConnectInProgressException();
+        }
+
+        try {
+            // 6. 락 획득 후 active 재조회 — race condition 방지 (double-check)
+            if (isAlreadyActive(userId, request.getOrganization(), accountType, loginIdHash)) {
+                throw new CodefAlreadyConnectedException();
             }
-            accountMap.put("certType", "1");
-            accountMap.put("derFile", request.getDerFileBase64());
-            accountMap.put("keyFile", request.getKeyFileBase64());
-        } else {
-            // 아이디/패스워드 방식 — id 필수
-            if (!hasValue(request.getId())) {
-                throw new IllegalArgumentException("아이디/패스워드 방식(loginType=1)은 id가 필수입니다.");
+
+            log.info("[Connect] userId={} organization={} businessType={} loginType={}",
+                    userId, request.getOrganization(), businessType, loginType);
+
+            // 7. RSA 암호화 + CODEF createAccount 호출
+            String encryptedPw = codefApiClient.encryptRSA(request.getPassword());
+
+            HashMap<String, Object> accountMap = new HashMap<>();
+            accountMap.put("countryCode", "KR");
+            accountMap.put("businessType", businessType);
+            accountMap.put("clientType", resolveClientType(businessType));
+            accountMap.put("organization", request.getOrganization());
+            accountMap.put("loginType", loginType);
+            accountMap.put("password", encryptedPw);
+
+            if ("0".equals(loginType)) {
+                // 인증서 방식 — derFile, keyFile 필수 / certType 하드코딩
+                if (!hasValue(request.getDerFileBase64()) || !hasValue(request.getKeyFileBase64())) {
+                    throw new IllegalArgumentException("인증서 방식(loginType=0)은 derFile과 keyFile이 필수입니다.");
+                }
+                accountMap.put("certType", "1");
+                accountMap.put("derFile", request.getDerFileBase64());
+                accountMap.put("keyFile", request.getKeyFileBase64());
+            } else {
+                // 아이디/패스워드 방식 — id 필수
+                if (!hasValue(request.getId())) {
+                    throw new IllegalArgumentException("아이디/패스워드 방식(loginType=1)은 id가 필수입니다.");
+                }
+                accountMap.put("id", request.getId());
             }
-            accountMap.put("id", request.getId());
-        }
 
-        if (hasValue(request.getBirthDate())) {
-            accountMap.put("birthDate", request.getBirthDate());
-        }
-
-        if ("CD".equals(businessType) && hasValue(request.getAccountNumber())) {
-            accountMap.put("cardNo", request.getAccountNumber());
-        }
-        if ("CD".equals(businessType) && hasValue(request.getAccountPassword())) {
-            accountMap.put("cardPassword", codefApiClient.encryptRSA(request.getAccountPassword()));
-        }
-
-        List<HashMap<String, Object>> accountList = new ArrayList<>();
-        accountList.add(accountMap);
-
-        HashMap<String, Object> parameterMap = new HashMap<>();
-        parameterMap.put("accountList", accountList);
-
-        String response = codefApiClient.createAccount(parameterMap);
-
-        JsonNode root = objectMapper.readTree(response);
-        String resultCode    = root.path("result").path("code").asText();
-        String resultMessage = root.path("result").path("message").asText();
-
-        log.info("[Connect] CODEF result code={} message={}", resultCode, resultMessage);
-
-        if (!"CF-00000".equals(resultCode)) {
-            throw new CodefApiException(resultCode, resultMessage);
-        }
-
-        JsonNode successList = root.path("data").path("successList");
-        if (successList.isArray()) {
-            String connectedId = root.path("data").path("connectedId").asText().replaceAll("[\\r\\n\\s]", "");
-            if (connectedId.isEmpty()) {
-                throw new CodefApiException("CONNECTED_ID_EMPTY", "CODEF connectedId가 비어 있습니다. organizationCode=" + request.getOrganization());
+            if (hasValue(request.getBirthDate())) {
+                accountMap.put("birthDate", request.getBirthDate());
             }
-            AccountType accountType = "ST".equals(businessType) ? AccountType.STOCK : AccountType.CARD;
+            if ("CD".equals(businessType) && hasValue(request.getAccountNumber())) {
+                accountMap.put("cardNo", request.getAccountNumber());
+            }
+            if ("CD".equals(businessType) && hasValue(request.getAccountPassword())) {
+                accountMap.put("cardPassword", codefApiClient.encryptRSA(request.getAccountPassword()));
+            }
 
-            // 인증서 방식(loginType=0)은 loginId=null, ID/PW 방식(loginType=1)은 request.getId() 사용
-            String loginId     = "1".equals(loginType) ? request.getId() : null;
-            String loginIdHash = (loginId != null) ? aesEncryptionUtil.hash(loginId) : null;
+            List<HashMap<String, Object>> accountList = new ArrayList<>();
+            accountList.add(accountMap);
 
-            for (JsonNode account : successList) {
-                String organization = account.path("organization").asText();
+            HashMap<String, Object> parameterMap = new HashMap<>();
+            parameterMap.put("accountList", accountList);
 
-                // 이미 활성화된 연동이 있으면 skip
-                boolean alreadyActive = (loginIdHash != null)
-                        ? connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
-                        userId, organization, accountType, loginIdHash)
-                        : connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
-                        userId, organization, accountType);
+            String response = codefApiClient.createAccount(parameterMap);
 
-                if (alreadyActive) {
-                    log.info("[Connect] already active for org={} type={}", organization, accountType);
-                    if (hasValue(request.getAccountNumber()) || hasValue(request.getAccountPassword())) {
-                        Optional<CodefConnectedAccount> existingOpt = (loginIdHash != null)
-                                ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
-                                userId, organization, accountType, loginIdHash)
-                                : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
-                                userId, organization, accountType);
-                        existingOpt.ifPresent(existing -> {
-                            if (hasValue(request.getAccountNumber()))   existing.updateAccountNumber(request.getAccountNumber());
-                            if (hasValue(request.getAccountPassword())) existing.updateAccountPassword(request.getAccountPassword());
-                            connectedAccountRepository.save(existing);
-                            log.info("[Connect] 기존 활성 연동 accountNumber/Password 업데이트 org={}", organization);
-                        });
+            JsonNode root = objectMapper.readTree(response);
+            String resultCode    = root.path("result").path("code").asText();
+            String resultMessage = root.path("result").path("message").asText();
+
+            log.info("[Connect] CODEF result code={} message={}", resultCode, resultMessage);
+
+            if (!"CF-00000".equals(resultCode)) {
+                throw new CodefApiException(resultCode, resultMessage);
+            }
+
+            // 8. DB 저장 또는 inactive 재활성화
+            JsonNode successList = root.path("data").path("successList");
+            if (successList.isArray()) {
+                String connectedId = root.path("data").path("connectedId").asText().replaceAll("[\\r\\n\\s]", "");
+                if (connectedId.isEmpty()) {
+                    throw new CodefApiException("CONNECTED_ID_EMPTY", "CODEF connectedId가 비어 있습니다. organizationCode=" + request.getOrganization());
+                }
+
+                for (JsonNode account : successList) {
+                    String organization = account.path("organization").asText();
+
+                    // 선조회+더블체크로 이미 차단됐지만 safety net
+                    if (isAlreadyActive(userId, organization, accountType, loginIdHash)) {
+                        log.warn("[Connect] safety net: already active org={} type={}", organization, accountType);
+                        continue;
                     }
-                    continue;
-                }
 
-                // 해제(inactive) 상태 레코드가 있으면 재활성화, 없으면 새로 생성
-                CodefConnectedAccount conn = ((loginIdHash != null)
-                        ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveFalse(
-                        userId, organization, accountType, loginIdHash)
-                        : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveFalse(
-                        userId, organization, accountType))
-                        .orElseGet(() -> CodefConnectedAccount.create(
-                                userId, connectedId, organization, accountType, loginId, loginIdHash));
+                    CodefConnectedAccount conn = ((loginIdHash != null)
+                            ? connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveFalse(
+                                    userId, organization, accountType, loginIdHash)
+                            : connectedAccountRepository.findByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveFalse(
+                                    userId, organization, accountType))
+                            .orElseGet(() -> CodefConnectedAccount.create(
+                                    userId, connectedId, organization, accountType, loginId, loginIdHash));
 
-                conn.reactivate(connectedId, loginId, loginIdHash);
-                // STOCK: 증권 계좌번호/비밀번호 / CARD(0455·0301): 카드번호/비밀번호 — 동일 컬럼 재활용
-                if (hasValue(request.getAccountNumber()))   conn.updateAccountNumber(request.getAccountNumber());
-                if (hasValue(request.getAccountPassword())) conn.updateAccountPassword(request.getAccountPassword());
-                CodefConnectedAccount saved = connectedAccountRepository.save(conn);
-                log.info("[Connect] saved/reactivated connectedId for org={} type={}", organization, accountType);
+                    conn.reactivate(connectedId, loginId, loginIdHash);
+                    // STOCK: 증권 계좌번호/비밀번호 / CARD(0455·0301): 카드번호/비밀번호 — 동일 컬럼 재활용
+                    if (hasValue(request.getAccountNumber()))   conn.updateAccountNumber(request.getAccountNumber());
+                    if (hasValue(request.getAccountPassword())) conn.updateAccountPassword(request.getAccountPassword());
+                    CodefConnectedAccount saved = connectedAccountRepository.save(conn);
+                    log.info("[Connect] saved/reactivated connectedId for org={} type={}", organization, accountType);
 
-                // 최초 동기화 비동기 트리거 — 즉시 200 OK 반환 후 별도 스레드에서 실행
-                try {
-                    self.triggerInitialSync(userId, saved);
-                } catch (Exception e) {
-                    log.warn("[Connect] 최초 동기화 트리거 실패 — 응답에는 영향 없음 userId={} org={}", userId, organization, e);
+                    // 10. 최초 동기화 비동기 트리거 — 즉시 200 OK 반환 후 별도 스레드에서 실행
+                    try {
+                        self.triggerInitialSync(userId, saved);
+                    } catch (Exception e) {
+                        log.warn("[Connect] 최초 동기화 트리거 실패 — 응답에는 영향 없음 userId={} org={}", userId, organization, e);
+                    }
                 }
             }
-        }
 
-        return response;
+            return response;
+
+        } finally {
+            // 9. connect lock 해제 (소유권 검증 후 삭제)
+            releaseConnectLock(lockKey, lockToken, userId);
+        }
     }
 
     // 연동 해지 — CODEF deleteAccount 호출 후 is_active=false
@@ -440,6 +458,29 @@ public class CodefService {
         String originalName = file.getOriginalFilename();
         if (originalName == null || !originalName.toLowerCase().endsWith(expectedExt)) {
             throw new IllegalArgumentException("허용되지 않는 파일 형식입니다: " + originalName + " (허용: " + expectedExt + ")");
+        }
+    }
+
+    private boolean isAlreadyActive(Long userId, String organization, AccountType accountType, String loginIdHash) {
+        return (loginIdHash != null)
+                ? connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashAndIsActiveTrue(
+                        userId, organization, accountType, loginIdHash)
+                : connectedAccountRepository.existsByUserIdAndOrganizationCodeAndAccountTypeAndLoginIdHashIsNullAndIsActiveTrue(
+                        userId, organization, accountType);
+    }
+
+    private String buildConnectLockKey(Long userId, AccountType accountType, String organization,
+                                       String loginType, String credentialKey) {
+        return CONNECT_LOCK_PREFIX + userId + ":" + accountType + ":" + organization + ":" + loginType + ":" + credentialKey;
+    }
+
+    private void releaseConnectLock(String lockKey, String lockToken, Long userId) {
+        String current = stringRedisTemplate.opsForValue().get(lockKey);
+        if (lockToken.equals(current)) {
+            stringRedisTemplate.delete(lockKey);
+            log.debug("[Connect] Redis 락 해제 userId={}", userId);
+        } else {
+            log.warn("[Connect] 락 소유권 불일치 — 해제 건너뜀 userId={} (TTL 만료 후 재발급된 락)", userId);
         }
     }
 

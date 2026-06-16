@@ -26,6 +26,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.core.task.TaskRejectedException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -312,6 +313,9 @@ public class CodefSyncService {
 
                 String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
                 BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
+                StockAmounts corrected = correctMissingStockAmounts(valuationAmt, purchaseAmt, valuationPL, earningsRate);
+                purchaseAmt = corrected.purchaseAmount();
+                valuationPL = corrected.valuationPl();
 
                 holdingItems.add(new StockItemDto(
                         firstNonEmpty(item, "resProductType"),
@@ -707,6 +711,9 @@ public class CodefSyncService {
 
                     String earningsRateStr = firstNonEmpty(item, "resEarningsRate").replaceAll("[^0-9.\\-]", "");
                     BigDecimal earningsRate = earningsRateStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(earningsRateStr);
+                    StockAmounts corrected = correctMissingStockAmounts(valuationAmt, purchaseAmt, valuationPL, earningsRate);
+                    purchaseAmt = corrected.purchaseAmount();
+                    valuationPL = corrected.valuationPl();
 
                     holdingItems.add(new StockItemDto(
                             firstNonEmpty(item, "resProductType"),
@@ -830,4 +837,32 @@ public class CodefSyncService {
         long rate = FX_RATES.getOrDefault(currencyCode.toUpperCase(), 1L);
         return amount * rate;
     }
+
+    private StockAmounts correctMissingStockAmounts(long valuationAmt, long purchaseAmt,
+                                                    long valuationPL, BigDecimal earningsRate) {
+        if (valuationAmt <= 0 || (purchaseAmt != 0 && valuationPL != 0)) {
+            return new StockAmounts(purchaseAmt, valuationPL);
+        }
+
+        // 수익률 0% → 매입금액 = 평가금액, 평가손익 = 0
+        if (earningsRate.compareTo(BigDecimal.ZERO) == 0) {
+            long correctedPurchaseAmount = purchaseAmt == 0 ? valuationAmt : purchaseAmt;
+            return new StockAmounts(correctedPurchaseAmount, 0L);
+        }
+
+        BigDecimal denominator = BigDecimal.ONE.add(
+                earningsRate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP));
+        if (denominator.compareTo(BigDecimal.ZERO) == 0) {
+            return new StockAmounts(purchaseAmt, valuationPL);
+        }
+
+        long calculatedPurchaseAmount = BigDecimal.valueOf(valuationAmt)
+                .divide(denominator, 0, RoundingMode.HALF_UP)
+                .longValue();
+        long correctedPurchaseAmount = purchaseAmt == 0 ? calculatedPurchaseAmount : purchaseAmt;
+        long correctedValuationPl = valuationPL == 0 ? valuationAmt - correctedPurchaseAmount : valuationPL;
+        return new StockAmounts(correctedPurchaseAmount, correctedValuationPl);
+    }
+
+    private record StockAmounts(long purchaseAmount, long valuationPl) {}
 }

@@ -145,6 +145,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage(), ErrorCode.CODEF_UNSUPPORTED_OPERATION.name()));
     }
 
+    // 이미 활성 연동이 존재 — 409 Conflict
+    @ExceptionHandler(CodefAlreadyConnectedException.class)
+    public ResponseEntity<ApiResponse<?>> handleCodefAlreadyConnected(CodefAlreadyConnectedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(e.getMessage(), "CODEF_ALREADY_CONNECTED"));
+    }
+
+    // 동일 기관 연동이 진행 중 — 409 Conflict
+    @ExceptionHandler(CodefConnectInProgressException.class)
+    public ResponseEntity<ApiResponse<?>> handleCodefConnectInProgress(CodefConnectInProgressException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(e.getMessage(), "CODEF_CONNECT_IN_PROGRESS"));
+    }
+
     // 금융기관 사이트 변경/점검으로 조회 불가 (CF-12701, CF-12710) — 503 Service Unavailable
     @ExceptionHandler(CodefInstitutionUnavailableException.class)
     public ResponseEntity<ApiResponse<?>> handleCodefInstitutionUnavailable(CodefInstitutionUnavailableException e) {

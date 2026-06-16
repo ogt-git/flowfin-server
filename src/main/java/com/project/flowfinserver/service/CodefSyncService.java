@@ -588,9 +588,10 @@ public class CodefSyncService {
                                     org, startDate, e.getCodefCode());
                             // attempt 루프 계속 → 1회 재시도
                         } else {
-                            log.warn("[CODEF Sync] 금융기관 재시도 실패 — 남은 월 전체 스킵 org={} startDate={} code={}",
+                            log.warn("[CODEF Sync] 금융기관 재시도 실패 — 해당 월 스킵 org={} startDate={} code={}",
                                     org, startDate, e.getCodefCode());
-                            throw e; // while 루프 탈출, CodefBatchService로 전파
+                            totalSkipped++;
+                            break; // 해당 월만 스킵, 다음 달 계속
                         }
                     } catch (CodefRetryableException e) {
                         if (attempt < 3) {

@@ -24,11 +24,28 @@ FlowFin은 사용자의 카드 지출과 증권 자산을 한곳에 모아 현�
 
 ## 팀원 구성 & 역할
 
-| 구분 | 오경택 | 김진엽 |
-| --- | --- | --- |
-| 프로필 | <img src="https://github.com/ogt-git.png" width="80" alt="오경택 GitHub 프로필" /> | <img src="https://github.com/jinyeob1101.png" width="80" alt="김진엽 GitHub 프로필" /> |
-| 담당 도메인 | API 서버, DB, 보안, CODEF, AI, DevOps | 회원, 커뮤니티 |
-| GitHub | [@ogt-git](https://github.com/ogt-git) | [@jinyeob1101](https://github.com/jinyeob1101) |
+<table>
+  <tr>
+    <th align="center">오경택</th>
+    <th align="center">김진엽</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/ogt-git.png" width="80" alt="오경택 GitHub 프로필" />
+    </td>
+    <td align="center">
+      <img src="https://github.com/jinyeob1101.png" width="80" alt="김진엽 GitHub 프로필" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center">API 서버, DB, 보안, CODEF, AI, DevOps</td>
+    <td align="center">회원, 커뮤니티</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/ogt-git">@ogt-git</a></td>
+    <td align="center"><a href="https://github.com/jinyeob1101">@jinyeob1101</a></td>
+  </tr>
+</table>
 
 ## 프로젝트 구조
 

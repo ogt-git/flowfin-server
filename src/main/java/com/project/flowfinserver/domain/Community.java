@@ -56,9 +56,10 @@ public class Community {
         return community;
     }
 
-    public void update(String title, String content) {
+    public void update(String title, String content, String category) {
         this.title = title;
         this.content = content;
+        this.category = category;
     }
 
     public void increaseViews() {

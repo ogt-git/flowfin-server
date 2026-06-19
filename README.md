@@ -26,7 +26,7 @@ FlowFin은 사용자의 카드 지출과 증권 자산을 한곳에 모아 현�
 
 <table>
   <tr>
-    <th align="center">구분</th>
+    <th align="center">팀원</th>
     <th align="center">오경택</th>
     <th align="center">김진엽</th>
   </tr>

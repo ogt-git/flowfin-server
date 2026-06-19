@@ -81,7 +81,8 @@ public class CommunityService {
             throw new UnauthorizedException("수정 권한이 없습니다.");
         }
 
-        community.update(request.getTitle(), request.getContent());
+        community.update(request.getTitle(), request.getContent(), request.getCategory());
+
         return new CommunityResponse(community, resolveAuthorName(userId),
                 commentRepository.countByCommunityId(id));
     }

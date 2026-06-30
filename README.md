@@ -66,6 +66,8 @@ flowfin-server/
 ├─ docker/
 │  └─ init.sql
 ├─ docs/
+│  ├─ demo/
+│  ├─ images/
 │  └─ deploy-nginx.md
 ├─ src/
 │  ├─ main/
@@ -183,43 +185,37 @@ flowchart LR
 
 이메일 인증 후 회원가입하고, 로그인 시 Access Token과 Refresh Token을 발급합니다. Access Token은 응답으로 내려가고 Refresh Token은 HttpOnly 쿠키로 관리되며, 서버는 Redis에 사용자별 Refresh Token을 저장합니다. 토큰 재발급 시 기존 Refresh Token과 Redis 저장값을 비교하고, 일치하지 않으면 저장 토큰을 삭제해 재사용을 차단합니다.
 
-![회원/인증 데모](docs/demo-auth.png)
-<!-- TODO: 확인 필요 -->
+![회원가입/로그인 데모](docs/demo/로그인&회원가입_짧은시연.gif)
 
 ### CODEF 카드/증권 연동
 
 카드와 증권 계정을 CODEF `createAccount` 흐름으로 연결하고, 연결 직후 초기 동기화를 비동기로 시작합니다. 카드 동기화는 청구 내역을 Expense로 저장하고, 증권 동기화는 계좌와 보유 종목을 AssetAccount와 AssetItem으로 upsert합니다. 수동 동기화는 Redis 쿨다운으로 5분에 한 번만 허용됩니다.
 
-![CODEF 연동 데모](docs/demo-codef-link.png)
-<!-- TODO: 확인 필요 -->
+![CODEF 연동 데모](docs/demo/연동_짧은시연.gif)
 
 ### 지출 조회와 자동 분류
 
 카드 청구 내역은 가맹점명 기반 Rule 분류를 먼저 시도합니다. Rule이 없으면 `PENDING` 상태로 저장한 뒤 트랜잭션 커밋 후 OpenAI 분류를 비동기로 수행합니다. 분류 결과는 11개 고정 카테고리 중 하나로 저장하고, 신뢰도가 기준값보다 낮거나 파싱에 실패하면 기타지출로 fallback합니다. 사용자가 직접 수정한 지출은 자동 분류가 덮어쓰지 않습니다.
 
-![지출 분석 데모](docs/demo-expenses.png)
-<!-- TODO: 확인 필요 -->
+![지출 분석 데모](docs/demo/지출_짧은시연.gif)
 
 ### 자산 통합과 투자 가능 금액 계산
 
 증권 계좌의 예수금과 수동 입력한 현금성 자산을 합산하고, 최근 고정비 평균과 비상금을 제외해 투자 가능 금액을 계산합니다. 계산 결과가 음수면 0으로 보정하며, 자산이 연결되지 않은 경우 포트폴리오 추천 전에 자산 연결이 필요하다는 응답을 반환합니다.
 
-![자산 대시보드 데모](docs/demo-assets.png)
-<!-- TODO: 확인 필요 -->
+![자산 대시보드 데모](docs/demo/자산_짧은시연.gif)
 
 ### AI 포트폴리오 추천
 
 투자 성향과 투자 가능 금액을 기반으로 OpenAI 포트폴리오 추천을 생성합니다. 응답은 자산군, 하위 분류, 비중, 금액, 추천 사유로 정규화되며, 비중 합계 검증과 특정 상품명 제거 처리를 거쳐 Portfolio에 저장됩니다.
 
-![포트폴리오 추천 데모](docs/demo-portfolio.png)
-<!-- TODO: 확인 필요 -->
+![포트폴리오 추천 데모](docs/demo/포트폴리오_짧은시연.gif)
 
 ### 커뮤니티와 댓글
 
 게시글 목록, 상세 조회, 작성, 수정, 삭제, 좋아요, 포트폴리오 공유를 제공합니다. 댓글은 커뮤니티 게시글 하위 리소스로 관리되며, 프로젝트 규칙상 하드 삭제 대신 삭제 상태를 응답에서 처리하는 흐름을 사용합니다.
 
-![커뮤니티 데모](docs/demo-community.png)
-<!-- TODO: 확인 필요 -->
+![커뮤니티 데모](docs/demo/커뮤니티_짧은시연.gif)
 
 ## 핵심 기술
 

@@ -11,6 +11,7 @@ import com.project.flowfinserver.dto.codef.CodefSyncResultDto;
 import com.project.flowfinserver.dto.codef.StockAssetDto;
 import com.project.flowfinserver.dto.codef.StockItemDto;
 import com.project.flowfinserver.exception.*;
+import com.project.flowfinserver.exception.ExchangeRateUnavailableException;
 import com.project.flowfinserver.openai.AiExpenseClassifier;
 import com.project.flowfinserver.util.MaskingUtil;
 import com.project.flowfinserver.repository.CodefConnectedAccountRepository;
@@ -34,7 +35,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -55,13 +55,8 @@ public class CodefSyncService {
     private static final Set<String> LIMITED_ORG_CARDS = Set.of("0305", "0320");
     private static final String JEJUCARD_ORG = "0321";  // 제주카드: startDate yyyyMMdd 형식 요구
     private static final long SYNC_LOCK_TTL_SECONDS = 300; // 동기화 락 TTL — 서버 장애 시 자동 해제용
+    private static final int RESULT_FX_UNAVAILABLE = -2;   // 환율 정보 없음 — DB 쓰기 없이 스킵
 
-    // 고정 환율표 (KRW 기준, 통화 추가 시 여기에만 항목 추가)
-    private static final Map<String, Long> FX_RATES = Map.of(
-            "USD", 1_500L,
-            "CNY",   200L,
-            "JPY",    10L
-    );
     // 평가금액·매입금액·평가손익이 항상 원화로 내려오는 기관
     private static final Set<String> GROUP_A_ORGS = Set.of("0218", "0247", "1247");
     // resAccountCurrency 신뢰 불가 — 전 필드 원화로 간주하는 기관
@@ -74,6 +69,7 @@ public class CodefSyncService {
     private final AssetService assetService;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final ExchangeRateService exchangeRateService;
 
     // 카드 수동 새로고침 — Redis 쿨다운 5분 (키: codef:refresh:cooldown:{userId}:CARD)
     public CodefSyncResultDto manualSyncCard(Long userId) {
@@ -215,7 +211,10 @@ public class CodefSyncService {
             try {
                 int result = syncSingleStockAccount(userId, account);
                 if (result > 0) savedCount++;
-                else skippedCount++;
+                else if (result == RESULT_FX_UNAVAILABLE) {
+                    log.warn("[CODEF Sync] 환율 정보 없음 — 계좌 업데이트 스킵, 기존 DB 값 유지 org={}", account.getOrganizationCode());
+                    failedAccounts.add(account.getOrganizationCode() + "(환율없음)");
+                } else skippedCount++;
             } catch (CodefAccountNotFoundException e) {
                 throw e;
             } catch (CodefCooldownException e) {
@@ -278,19 +277,32 @@ public class CodefSyncService {
 
                 String currencyCode = firstNonEmpty(item, "resAccountCurrency");
 
-                long valuationAmt;
-                long purchaseAmt;
-                long valuationPL;
+                long valuationAmt = 0L;
+                long purchaseAmt = 0L;
+                long valuationPL = 0L;
 
+                ExchangeRateUnavailableException fxErr = null;
                 if (GROUP_A_ORGS.contains(organizationCode) || GROUP_B_ORGS.contains(organizationCode)) {
                     valuationAmt = parseLongField(item, "resValuationAmt");
                     purchaseAmt  = parseLongField(item, "resPurchaseAmount");
                     valuationPL  = parseLongField(item, "resValuationPL");
                 } else {
                     // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
-                    valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
-                    purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
-                    valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                    try {
+                        valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                        purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                        valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                    } catch (ExchangeRateUnavailableException e) {
+                        fxErr = e;
+                    }
+                }
+
+                if (fxErr != null) {
+                    log.warn("[CODEF] 환율 없음 — 저장 스킵 org={} currency={}", organizationCode, fxErr.getCurrencyCode());
+                    return CodefSyncResultDto.builder()
+                            .savedCount(0).skippedCount(0)
+                            .failedAccounts(List.of(organizationCode + "(환율없음)"))
+                            .syncedAt(LocalDateTime.now()).build();
                 }
 
                 // itemCode 없으면 UNIQUE 제약 키 없음 — 응답 신뢰 불가
@@ -685,19 +697,29 @@ public class CodefSyncService {
 
                     String currencyCode = firstNonEmpty(item, "resAccountCurrency");
 
-                    long valuationAmt;
-                    long purchaseAmt;
-                    long valuationPL;
+                    long valuationAmt = 0L;
+                    long purchaseAmt = 0L;
+                    long valuationPL = 0L;
 
+                    ExchangeRateUnavailableException fxError = null;
                     if (GROUP_A_ORGS.contains(organization) || GROUP_B_ORGS.contains(organization)) {
                         valuationAmt = parseLongField(item, "resValuationAmt");
                         purchaseAmt  = parseLongField(item, "resPurchaseAmount");
                         valuationPL  = parseLongField(item, "resValuationPL");
                     } else {
                         // 그룹 C: resAccountCurrency 기준으로 USD → KRW 환산
-                        valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
-                        purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
-                        valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                        try {
+                            valuationAmt = toKrw(parseLongField(item, "resValuationAmt"),  currencyCode);
+                            purchaseAmt  = toKrw(parseLongField(item, "resPurchaseAmount"), currencyCode);
+                            valuationPL  = toKrw(parseLongField(item, "resValuationPL"),   currencyCode);
+                        } catch (ExchangeRateUnavailableException e) {
+                            fxError = e;
+                        }
+                    }
+
+                    if (fxError != null) {
+                        log.warn("[CODEF Sync] 환율 없음 — 이 계좌 업데이트 스킵 org={} currency={}", organization, fxError.getCurrencyCode());
+                        return RESULT_FX_UNAVAILABLE;
                     }
 
                     // 전량 매도 종목: 수량·매입금액·평가금액 모두 0 — 보유 목록에서 제외
@@ -835,8 +857,7 @@ public class CodefSyncService {
     }
 
     private long toKrw(long amount, String currencyCode) {
-        long rate = FX_RATES.getOrDefault(currencyCode.toUpperCase(), 1L);
-        return amount * rate;
+        return exchangeRateService.convertToKrw(amount, currencyCode);
     }
 
     private StockAmounts correctMissingStockAmounts(long valuationAmt, long purchaseAmt,

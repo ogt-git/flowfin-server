@@ -71,8 +71,10 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.POST, "/api/codef/card", "/api/codef/stock").denyAll();
 
                     if (Arrays.asList(environment.getActiveProfiles()).contains("prod")) {
+                        auth.requestMatchers("/api/dev/**").denyAll();
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").denyAll();
                     } else {
+                        auth.requestMatchers("/api/dev/**").permitAll();
                         auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll();
                     }
 

@@ -49,6 +49,14 @@ openai:
     classification: ${OPENAI_MODEL_CLASSIFICATION:gpt-4.1-nano}
     portfolio: ${OPENAI_MODEL_PORTFOLIO:gpt-4o}
 
+# 한국수출입은행 환율 API — 운영 env 주입 필수
+koreaexim:
+  api:
+    base-url: ${KOREAEXIM_BASE_URL}
+    auth-key: ${KOREAEXIM_AUTH_KEY}
+    data: ${KOREAEXIM_DATA}
+    timeout-ms: ${KOREAEXIM_TIMEOUT_MS:10000}
+
 cors:
   allowed-origins: https://flowfin.kr,https://www.flowfin.kr
 

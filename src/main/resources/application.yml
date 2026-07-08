@@ -77,6 +77,15 @@ openai:
   portfolio:
     timeout-ms: ${OPENAI_PORTFOLIO_TIMEOUT:60000}
 
+# 한국수출입은행 환율 API
+# auth-key 미설정 시 앱 기동은 정상, 환율 조회/스케줄러만 skip
+koreaexim:
+  api:
+    base-url: ${KOREAEXIM_BASE_URL:https://oapi.koreaexim.go.kr}
+    auth-key: ${KOREAEXIM_AUTH_KEY:}
+    data: ${KOREAEXIM_DATA:AP01}
+    timeout-ms: ${KOREAEXIM_TIMEOUT_MS:10000}
+
 # CORS
 cors:
   allowed-origins: https://flowfin.kr,https://www.flowfin.kr

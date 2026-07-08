@@ -1,18 +1,94 @@
-### 회원가입
-POST http://localhost:8080/api/auth/signup
+@baseUrl = http://localhost:8080
+@email = flowfin.demo.user@example.com
+@password = Flowfin123!
+@riskType = MODERATE
+
+### 00. Create or reset local test user and dummy data
+# Local/dev only. This endpoint is disabled when the prod profile is active.
+# It creates:
+# - test user
+# - manual assets
+# - KRW, USD, JPY, CNY stock assets so portfolio recommendation can pass assetLinked=true
+# - USD/JPY/CNY assets are converted through the current ExchangeRateService rates
+# - sample expenses for the current month and fixed-cost calculation
+POST {{baseUrl}}/api/dev/test-user
+
+### 01. Login test user
+POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "test@test.com",
-  "password": "1234",
-  "name": "테스트"
+  "email": "{{email}}",
+  "password": "{{password}}"
 }
 
-### 로그인
-POST http://localhost:8080/api/auth/login
+> {%
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("userId", String(response.body.userId));
+%}
+
+### 02. Get my profile
+GET {{baseUrl}}/api/users/myprofile
+Authorization: Bearer {{accessToken}}
+
+### 03. Set investment tendency
+POST {{baseUrl}}/api/users/tendency
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "email": "test@test.com",
-  "password": "1234"
+  "riskType": "{{riskType}}"
 }
+
+### 04. List manual assets
+GET {{baseUrl}}/api/assets/manual
+Authorization: Bearer {{accessToken}}
+
+### 05. Get asset summary
+GET {{baseUrl}}/api/assets/summary
+Authorization: Bearer {{accessToken}}
+
+### 06. Check seeded exchange rates
+GET {{baseUrl}}/api/market/exchange-rates
+Authorization: Bearer {{accessToken}}
+
+### 07. List seeded stock assets
+# Foreign assets are stored as KRW after conversion using the rates shown in step 06.
+GET {{baseUrl}}/api/stocks
+Authorization: Bearer {{accessToken}}
+
+### 08. List expenses
+GET {{baseUrl}}/api/expenses?page=0&size=20
+Authorization: Bearer {{accessToken}}
+
+### 09. Monthly expense stats
+GET {{baseUrl}}/api/expenses/stats
+Authorization: Bearer {{accessToken}}
+
+### 10. Request portfolio recommendation
+# Expected:
+# - 202 Accepted with data.portfolioId when OpenAI settings are valid.
+# - 200 cache hit if an identical completed recommendation exists within 24h.
+POST {{baseUrl}}/api/portfolio/recommend
+Authorization: Bearer {{accessToken}}
+
+### 11. Poll latest portfolio recommendation
+# If step 10 returns PENDING, wait a few seconds and run this again.
+GET {{baseUrl}}/api/portfolio
+Authorization: Bearer {{accessToken}}
+
+### 12. Portfolio recommendation history
+GET {{baseUrl}}/api/portfolio/history
+Authorization: Bearer {{accessToken}}
+
+### 13. Refresh access token
+# Uses the HttpOnly refreshToken cookie set by login/refresh in supported HTTP clients.
+POST {{baseUrl}}/api/auth/refresh
+
+> {%
+    client.global.set("accessToken", response.body.accessToken);
+%}
+
+### 14. Logout
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{accessToken}}

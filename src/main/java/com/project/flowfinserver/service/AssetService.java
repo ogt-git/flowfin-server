@@ -253,6 +253,7 @@ public class AssetService {
                             .findAllByAccountId(account.getId())
                             .stream()
                             .map(item -> new StockItemResponse(
+                                    item.getProductType(),
                                     item.getItemName(),
                                     item.getItemCode(),
                                     item.getQuantity(),

@@ -203,6 +203,26 @@ CREATE TABLE IF NOT EXISTS comment (
     FOREIGN KEY (user_id)      REFERENCES users (id)
 );
 
+-- 한국수출입은행 일환율 (currency_code + base_date UNIQUE)
+CREATE TABLE IF NOT EXISTS exchange_rate
+(
+    id                     BIGINT         NOT NULL AUTO_INCREMENT,
+    currency_code          VARCHAR(10)    NOT NULL COMMENT '정규화된 통화 코드 (USD, CNY, JPY)',
+    base_currency          VARCHAR(10)    NOT NULL DEFAULT 'KRW',
+    rate                   DECIMAL(15, 4) NOT NULL COMMENT '1 currency_code = rate KRW',
+    base_date              DATE           NOT NULL COMMENT '환율 기준일',
+    provider               VARCHAR(50)    NOT NULL,
+    fetched_at             DATETIME       NOT NULL,
+    original_currency_code VARCHAR(20)    COMMENT '원본 통화 코드 (CNH, JPY(100) 등)',
+    original_rate_str      VARCHAR(50)    COMMENT '원본 deal_bas_r 문자열',
+    created_at             DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_er_currency_date (currency_code, base_date),
+    INDEX idx_er_currency_date (currency_code, base_date),
+    INDEX idx_er_currency_fetched (currency_code, fetched_at)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;
+
 -- ============================================================
 -- 시드 데이터
 -- ============================================================
